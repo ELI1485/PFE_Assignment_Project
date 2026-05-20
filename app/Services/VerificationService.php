@@ -315,15 +315,26 @@ class VerificationService
 
     private function slotOrder(): array
     {
-        return [
-            '09:00' => 0,
-            '10:00' => 1,
-            '11:00' => 2,
-            '14:00' => 3,
-            '15:00' => 4,
-            '16:00' => 5,
-            '17:00' => 6,
-        ];
+        $times = \App\Models\Creneau::query()
+            ->select('heure_debut')
+            ->distinct()
+            ->orderBy('heure_debut')
+            ->get()
+            ->map(function ($creneau) {
+                return is_object($creneau->heure_debut)
+                    ? $creneau->heure_debut->format('H:i')
+                    : substr((string) $creneau->heure_debut, 0, 5);
+            })
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $order = [];
+        foreach ($times as $i => $time) {
+            $order[$time] = $i;
+        }
+
+        return $order;
     }
 
     private function getSlotIndex($creneau, array $slotOrder): ?int

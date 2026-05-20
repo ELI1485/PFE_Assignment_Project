@@ -7,9 +7,10 @@ use App\Models\Etudiant;
 use App\Models\Projet;
 use App\Services\ExcelImportService;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
-use Maatwebsite\Excel\Facades\Excel;
-
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ImportController extends Controller
 {
@@ -42,101 +43,48 @@ class ImportController extends Controller
         );
     }
 
-    public function importEtudiants(Request $request)
+    /**
+     * Unified import: a single Excel file containing two sheets
+     *  - Sheet 1: students
+     *  - Sheet 2: professors
+     */
+    public function importUnified(Request $request)
     {
         $request->validate([
-            'file_etudiants' => 'required',
-            'file_etudiants.*' => 'file|mimes:xlsx,xls|max:5000',
+            'file' => 'required|file|mimes:xlsx,xls|max:5000',
         ]);
 
-        // Validate each file's structure before touching the DB
-        foreach ($request->file('file_etudiants') as $file) {
-            $error = $this->detectWrongFileType($file, 'etudiants');
-            if ($error) {
-                return redirect()->route('import.form')
-                    ->withErrors(['file_etudiants' => $error])
-                    ->withInput();
-            }
-        }
-
-        Etudiant::query()->delete();
-        Projet::query()->delete();
-
-        \Illuminate\Support\Facades\DB::table('jury_enseignant')->delete();
-        \App\Models\Soutenance::query()->delete();
-        \App\Models\Jury::query()->delete();
-        \App\Models\Creneau::query()->delete();
-
-        $totalCount = 0;
-        $details = [];
-
-        foreach ($request->file('file_etudiants') as $file) {
-            $filename = strtolower($file->getClientOriginalName());
-
-            $filiere = $this->detectFiliere($filename, $file);
-
-            $count = $this->importService->import($file, $filiere);
-            $totalCount += $count;
-            $details[] = "$count étudiants ($filiere)";
-        }
-
-        $detail = implode(', ', $details);
-
-        return redirect()->route('import.form')
-            ->with('success', "Fichiers importés avec succès — $totalCount étudiants au total. ($detail)");
-    }
-
-    public function importProfs(Request $request)
-    {
-        $request->validate([
-            'file_profs' => 'required|file|mimes:xlsx,xls|max:2048',
-        ]);
-
-        $file = $request->file('file_profs');
-
-        // Validate file structure before touching the DB
-        $error = $this->detectWrongFileType($file, 'enseignants');
-        if ($error) {
+        try {
+            $results = $this->importService->importUnified($request->file('file'));
+        } catch (\Throwable $e) {
             return redirect()->route('import.form')
-                ->withErrors(['file_profs' => $error])
+                ->withErrors(['file' => "Impossible d'importer le fichier : " . $e->getMessage()])
                 ->withInput();
         }
 
-        // Clear planning data and reset encadrant assignments.
-        // We keep Etudiants and Projets intact so the student list survives a professor re-import.
-        // encadrant_id is set to null here explicitly so the user knows to re-run Affectation.
-        \Illuminate\Support\Facades\DB::table('jury_enseignant')->delete();
-        \App\Models\Soutenance::query()->delete();
-        \App\Models\Jury::query()->delete();
-        \App\Models\Creneau::query()->delete();
-        Projet::query()->update(['encadrant_id' => null]);
+        $message = sprintf(
+            'Importation terminée : %d étudiants et %d enseignants ajoutés.',
+            $results['etudiants'] ?? 0,
+            $results['enseignants'] ?? 0
+        );
 
-        Enseignant::query()->delete();
-
-        $count = $this->importService->importEncadrants($file);
-
-        return redirect()->route('import.form')->with('success', "$count enseignants importés avec succès. Vous pouvez maintenant importer les fichiers étudiants.");
+        return redirect()->route('import.form')->with('success', $message);
     }
 
-    public function downloadEtudiantsTemplate()
+    /**
+     * Serve the single unified Excel template. The file lives in
+     * public/templates/excel_template.xlsx and is generated on-demand
+     * the first time it is requested if it is missing.
+     */
+    public function downloadTemplate()
     {
-        return response()->download(
-            public_path('templates/template_etudiants.xlsx')
-        );
-    }
+        $path = public_path('templates/excel_template.xlsx');
 
-    public function downloadEtudiantsEmailsTemplate()
-    {
-        return response()->download(
-            public_path('templates/template_etudiants_email.xlsx')
-        );
-    }
+        if (!file_exists($path)) {
+            $this->generateUnifiedTemplate($path);
+        }
 
-    public function downloadProfesseursTemplate()
-    {
-        return response()->download(
-            public_path('templates/template_enseignant.xlsx')
-        );
+        return response()->download($path, 'excel_template.xlsx');
     }
 
     /**
@@ -159,109 +107,53 @@ class ImportController extends Controller
         }
     }
 
-    // Vérifie que le fichier uploadé correspond bien au type attendu (étudiants ou enseignants)
-    private function detectWrongFileType(UploadedFile $file, string $expectedType): ?string
+    /**
+     * Build a fresh excel_template.xlsx with two sheets: Étudiants + Professeurs.
+     */
+    private function generateUnifiedTemplate(string $path): void
     {
-        try {
-            $rows = Excel::toArray([], $file)[0] ?? [];
-
-            // Find the first non-empty row to use as the header
-            $headerRow = null;
-            foreach ($rows as $row) {
-                $flat = array_filter(array_map('strval', $row));
-                if (count($flat) >= 2) {
-                    $headerRow = array_map(fn($v) => mb_strtolower(trim((string) $v)), $row);
-                    break;
-                }
-            }
-
-            if ($headerRow === null) {
-                return "Le fichier est vide ou son format n'est pas reconnu.";
-            }
-
-            $headerStr = implode(' ', $headerRow);
-
-            // Signatures that strongly indicate an étudiants file
-            $etudiantSignatures = ['cne', 'etudiant', 'étudiant', 'binome', 'binôme', 'sujet', 'langue'];
-            // Signatures that strongly indicate an enseignants file
-            $enseignantSignatures = ['enseignant', 'discipline', 'specialite', 'spécialité', 'encadrant', 'grade'];
-
-            $looksLikeEtudiant   = $this->matchesSignatures($headerStr, $etudiantSignatures);
-            $looksLikeEnseignant = $this->matchesSignatures($headerStr, $enseignantSignatures);
-
-            if ($expectedType === 'enseignants' && $looksLikeEtudiant && ! $looksLikeEnseignant) {
-                return "Format de document incorrect : vous avez importé une liste d'étudiants dans la section enseignants. Veuillez sélectionner le bon fichier.";
-            }
-
-            if ($expectedType === 'etudiants' && $looksLikeEnseignant && ! $looksLikeEtudiant) {
-                return "Format de document incorrect : vous avez importé une liste d'enseignants dans la section étudiants. Veuillez sélectionner le bon fichier.";
-            }
-        } catch (\Throwable) {
-            // If we cannot read the file at all, let the import attempt fail naturally
+        $directory = dirname($path);
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
         }
 
-        return null;
+        $spreadsheet = new Spreadsheet();
+
+        // Sheet 1 — Étudiants
+        $studentSheet = $spreadsheet->getActiveSheet();
+        $studentSheet->setTitle('Etudiants');
+        $studentHeaders = ['CNE', 'Nom', 'Prenom', 'Filiere', 'CNE Binome', 'Nom Binome', 'Prenom Binome', 'Sujet', 'Langue'];
+        $studentSheet->fromArray($studentHeaders, null, 'A1');
+        $this->styleHeaderRow($studentSheet, count($studentHeaders), 1);
+
+        // Sheet 2 — Professeurs (header on row 2 to match the historical layout)
+        $profSheet = $spreadsheet->createSheet();
+        $profSheet->setTitle('Professeurs');
+        $profSheet->setCellValue('A1', 'Liste des Enseignants');
+        $profSheet->mergeCells('A1:C1');
+        $profSheet->getStyle('A1')->getFont()->setBold(true);
+        $profSheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $profHeaders = ['Nom', 'Prenom', 'Specialite'];
+        $profSheet->fromArray($profHeaders, null, 'A2');
+        $this->styleHeaderRow($profSheet, count($profHeaders), 2);
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($path);
     }
 
-    private function matchesSignatures(string $haystack, array $signatures): bool
+    private function styleHeaderRow($sheet, int $cols, int $row): void
     {
-        foreach ($signatures as $sig) {
-            if (str_contains($haystack, $sig)) {
-                return true;
-            }
+        $lastColumn = chr(ord('A') + $cols - 1);
+        $range = "A{$row}:{$lastColumn}{$row}";
+        $sheet->getStyle($range)->getFont()->setBold(true);
+        $sheet->getStyle($range)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('DDEAFB');
+
+        for ($i = 0; $i < $cols; $i++) {
+            $col = chr(ord('A') + $i);
+            $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-
-        return false;
-    }
-
-    private function detectFiliere(string $filename, UploadedFile $file): string
-    {
-        $map = [
-            'ingenierie' => 'Ingénierie des Données',
-            'ingénierie' => 'Ingénierie des Données',
-            'donnees' => 'Ingénierie des Données',
-            'données' => 'Ingénierie des Données',
-            'tdia' => 'Transformation Digitale & Intelligence Artificielle',
-            'transformation' => 'Transformation Digitale & Intelligence Artificielle',
-            'digitale' => 'Transformation Digitale & Intelligence Artificielle',
-            'artificielle' => 'Transformation Digitale & Intelligence Artificielle',
-            'genie' => 'Génie Informatique',
-            'génie' => 'Génie Informatique',
-            'info'  => 'Génie Informatique',
-        ];
-
-        foreach ($map as $keyword => $filiere) {
-            if (str_contains($filename, $keyword)) {
-                return $filiere;
-            }
-        }
-
-        if (preg_match('/\btdia\b/i', $filename)) {
-            return 'Transformation Digitale & Intelligence Artificielle';
-        }
-        if (preg_match('/\bid\b/i', $filename)) {
-            return 'Ingénierie des Données';
-        }
-        if (preg_match('/\bgi\b/i', $filename)) {
-            return 'Génie Informatique';
-        }
-
-        try {
-            $rows = Excel::toArray([], $file)[0];
-            $haystack = strtolower(implode(' ', array_map('strval', array_merge(...array_slice($rows, 0, 5)))));
-
-            if (str_contains($haystack, 'ingénierie') || str_contains($haystack, 'ingenierie') || str_contains($haystack, 'données')) {
-                return 'Ingénierie des Données';
-            }
-            if (str_contains($haystack, 'tdia') || str_contains($haystack, 'transformation')) {
-                return 'Transformation Digitale & Intelligence Artificielle';
-            }
-            if (str_contains($haystack, 'génie') || str_contains($haystack, 'genie')) {
-                return 'Génie Informatique';
-            }
-        } catch (\Throwable $e) {
-        }
-
-        return 'Inconnue';
     }
 }

@@ -15,8 +15,6 @@ use Illuminate\Support\Facades\Log;
 
 class AssignmentService
 {
-    private const MAX_PLANNING_DAYS = 4;
-
     private const DEFAULT_ROOMS = [
         'S4A',
         'S5A',
@@ -75,9 +73,25 @@ class AssignmentService
         }
     }
 
-    public function planifierCreneaux(string $dateDebut): void
+    /**
+     * Generate Creneau records dynamically based on the user-provided
+     * start date, number of working days and slot ranges (HH:MM => HH:MM).
+     *
+     * @param string                $dateDebut  Start date (YYYY-MM-DD)
+     * @param int                   $nbJours    Number of working days (weekends skipped)
+     * @param array<string,string>  $slotRanges Map of "HH:MM" start => "HH:MM" end
+     */
+    public function planifierCreneaux(string $dateDebut, int $nbJours = 4, array $slotRanges = []): void
     {
         $this->ensureSallesExist();
+
+        if (empty($slotRanges)) {
+            $slotRanges = $this->defaultSlotRanges();
+        }
+
+        // Sort slot ranges chronologically by their start time so the
+        // dynamic slotOrder() helper stays consistent across days.
+        ksort($slotRanges);
 
         $coveredAsEtudiant2 = Projet::whereNotNull('etudiant2_id')
             ->pluck('etudiant2_id')
@@ -94,12 +108,13 @@ class AssignmentService
         }
 
         $capacite = $this->maxSoutenancesPerSlot();
+        $nbJours = max(1, $nbJours);
 
-        foreach ($this->workingDates($dateDebut, self::MAX_PLANNING_DAYS) as $date) {
-            foreach ($this->officialSlotRanges() as $debut => $fin) {
+        foreach ($this->workingDates($dateDebut, $nbJours) as $date) {
+            foreach ($slotRanges as $debut => $fin) {
                 Creneau::updateOrCreate(
                     [
-                        'date' => $date,
+                        'date'        => $date,
                         'heure_debut' => $debut,
                     ],
                     [
@@ -582,7 +597,40 @@ class AssignmentService
         return $dates;
     }
 
-    private function officialSlotRanges(): array
+    /**
+     * Build a slot ordering map ("HH:MM" => index) from the Creneau records
+     * currently in the DB. Replaces the previously hardcoded 7-slot layout
+     * so the algorithm honors whatever the user chose in the modal.
+     */
+    private function slotOrder(): array
+    {
+        $times = Creneau::query()
+            ->select('heure_debut')
+            ->distinct()
+            ->orderBy('heure_debut')
+            ->get()
+            ->map(function (Creneau $creneau) {
+                return is_object($creneau->heure_debut)
+                    ? $creneau->heure_debut->format('H:i')
+                    : substr((string) $creneau->heure_debut, 0, 5);
+            })
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $order = [];
+        foreach ($times as $i => $time) {
+            $order[$time] = $i;
+        }
+
+        return $order;
+    }
+
+    /**
+     * Default slot layout used when the caller does not supply custom ranges.
+     * Reproduces the historical 7-slot/day behaviour (09-12 + 14-18).
+     */
+    private function defaultSlotRanges(): array
     {
         return [
             '09:00' => '10:00',
@@ -592,19 +640,6 @@ class AssignmentService
             '15:00' => '16:00',
             '16:00' => '17:00',
             '17:00' => '18:00',
-        ];
-    }
-
-    private function slotOrder(): array
-    {
-        return [
-            '09:00' => 0,
-            '10:00' => 1,
-            '11:00' => 2,
-            '14:00' => 3,
-            '15:00' => 4,
-            '16:00' => 5,
-            '17:00' => 6,
         ];
     }
 

@@ -203,6 +203,34 @@
         </form>
     </div>
 </div>
+
+@if (session('planning_recommendation'))
+    <div class="app-modal-overlay" id="recommendationModal" aria-hidden="true">
+        <div class="app-modal-box" style="max-width: 560px;">
+            <div class="d-flex align-items-start gap-3 mb-3">
+                <div style="width:48px;height:48px;border-radius:50%;background:#fef3c7;color:#b45309;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="bi bi-lightbulb-fill" style="font-size:1.4rem;"></i>
+                </div>
+                <div>
+                    <h3 class="h5 fw-bold mb-1">Recommandation du planificateur</h3>
+                    <p class="text-muted small mb-0">
+                        Le générateur n'a pas pu placer 100% des étudiants avec votre configuration.
+                    </p>
+                </div>
+            </div>
+            <div class="alert alert-warning mb-4" style="font-size:0.92rem; line-height:1.6;">
+                {{ session('planning_recommendation') }}
+            </div>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary" onclick="closeRecommendationModal()">Fermer</button>
+                <button type="button" class="btn btn-success" onclick="closeRecommendationModal(); openPlanningModal();">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Relancer avec plus de jours
+                </button>
+            </div>
+        </div>
+    </div>
+@endif
 @endsection
 
 @push('scripts')
@@ -215,8 +243,24 @@
         document.getElementById('salleModal').classList.remove('is-open');
     }
 
+    function openRecommendationModal() {
+        const modal = document.getElementById('recommendationModal');
+        if (modal) modal.classList.add('is-open');
+    }
+
+    function closeRecommendationModal() {
+        const modal = document.getElementById('recommendationModal');
+        if (modal) modal.classList.remove('is-open');
+    }
+
     @if($errors->has('nom'))
         openSalleModal();
+    @endif
+
+    @if(session('planning_recommendation'))
+        document.addEventListener('DOMContentLoaded', function () {
+            openRecommendationModal();
+        });
     @endif
 </script>
 @endpush

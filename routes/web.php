@@ -15,11 +15,8 @@ Route::get('/', [AssignmentController::class, 'dashboard'])->name('dashboard');
 // ─── Import ───────────────────────────────────────────────────────────────────
 Route::get('/import', [ImportController::class, 'showForm'])->name('import.form');
 Route::post('/import/master', [ImportController::class, 'importMaster'])->name('import.master');
-Route::post('/import/etudiants', [ImportController::class, 'importEtudiants'])->name('import.etudiants');
-Route::post('/import/profs', [ImportController::class, 'importProfs'])->name('import.profs');
-Route::get('/import/templates/etudiants', [ImportController::class, 'downloadEtudiantsTemplate'])->name('import.template.etudiants');
-Route::get('/import/templates/etudiants-emails', [ImportController::class, 'downloadEtudiantsEmailsTemplate'])->name('import.template.etudiants.emails');
-Route::get('/import/templates/professeurs', [ImportController::class, 'downloadProfesseursTemplate'])->name('import.template.profs');
+Route::post('/import/unified', [ImportController::class, 'importUnified'])->name('import.unified');
+Route::get('/import/template', [ImportController::class, 'downloadTemplate'])->name('import.template');
 Route::post('/import/reset-database', [ImportController::class, 'resetDatabase'])->name('import.reset-db');
 
 // ─── Affectation des Encadrants ───────────────────────────────────────────────

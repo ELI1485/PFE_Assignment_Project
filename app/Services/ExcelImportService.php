@@ -2,12 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\Creneau;
+use App\Models\Enseignant;
 use App\Models\Etudiant;
+use App\Models\Jury;
 use App\Models\Projet;
 use App\Models\Salle;
+use App\Models\Soutenance;
 use App\Repositories\EnseignantRepository;
 use App\Repositories\EtudiantRepository;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ExcelImportService
@@ -21,6 +26,138 @@ class ExcelImportService
     {
         $this->etudiantRepository = $etudiantRepository;
         $this->enseignantRepository = $enseignantRepository;
+    }
+
+    /**
+     * Import a single Excel workbook that contains two sheets:
+     *   - Sheet 0 (Etudiants): CNE, Nom, Prenom, Filiere, CNE2, Nom2, Prenom2, Sujet, Langue
+     *   - Sheet 1 (Professeurs): Nom, Prenom, Specialite (header on row 2, data from row 3)
+     *
+     * The full planning state (juries, soutenances, creneaux, projets,
+     * etudiants and enseignants) is wiped beforehand so the imported file
+     * becomes the authoritative source of truth.
+     */
+    public function importUnified(UploadedFile $file): array
+    {
+        $allSheets = Excel::toArray([], $file);
+
+        if (count($allSheets) < 2) {
+            throw new \RuntimeException(
+                "Le fichier doit contenir au moins deux feuilles : étudiants (feuille 1) et professeurs (feuille 2)."
+            );
+        }
+
+        $studentRows = $allSheets[0] ?? [];
+        $professorRows = $allSheets[1] ?? [];
+
+        return DB::transaction(function () use ($studentRows, $professorRows) {
+            // Wipe the planning + people state — the unified import is authoritative.
+            DB::table('jury_enseignant')->delete();
+            Soutenance::query()->delete();
+            Jury::query()->delete();
+            Creneau::query()->delete();
+            Projet::query()->delete();
+            Etudiant::query()->delete();
+            Enseignant::query()->delete();
+
+            $etudiantsCount   = $this->insertStudentsFromRows($studentRows);
+            $enseignantsCount = $this->insertProfessorsFromRows($professorRows);
+
+            return [
+                'etudiants'   => $etudiantsCount,
+                'enseignants' => $enseignantsCount,
+            ];
+        });
+    }
+
+    private function insertStudentsFromRows(array $rows): int
+    {
+        $count = 0;
+
+        foreach ($rows as $index => $row) {
+            // Skip the header row.
+            if ($index === 0) {
+                continue;
+            }
+
+            $row = array_pad($row, 9, null);
+            [
+                $cne, $nom, $prenom, $filiere,
+                $cne2, $nom2, $prenom2,
+                $sujet, $langue,
+            ] = $row;
+
+            $nom    = trim((string) $nom);
+            $prenom = trim((string) $prenom);
+            if ($nom === '' || $prenom === '') {
+                continue;
+            }
+
+            $resolvedFiliere = trim((string) $filiere) !== '' ? trim((string) $filiere) : 'Inconnue';
+
+            $etudiant = Etudiant::create([
+                'cne'     => trim((string) $cne) ?: null,
+                'nom'     => $nom,
+                'prenom'  => $prenom,
+                'filiere' => $resolvedFiliere,
+            ]);
+
+            $etudiant2Id = null;
+            $nom2    = trim((string) $nom2);
+            $prenom2 = trim((string) $prenom2);
+            if ($nom2 !== '' && $prenom2 !== '') {
+                $etudiant2 = Etudiant::create([
+                    'cne'     => trim((string) $cne2) ?: null,
+                    'nom'     => $nom2,
+                    'prenom'  => $prenom2,
+                    'filiere' => $resolvedFiliere,
+                ]);
+                $etudiant2Id = $etudiant2->id;
+            }
+
+            Projet::create([
+                'cne'              => trim((string) $cne) ?: null,
+                'etudiant_id'      => $etudiant->id,
+                'etudiant2_id'     => $etudiant2Id,
+                'sujet'            => trim((string) $sujet),
+                'titre'            => trim((string) $sujet),
+                'langue_soutenance' => trim((string) ($langue ?: 'Francais')),
+            ]);
+
+            $count += $etudiant2Id ? 2 : 1;
+        }
+
+        return $count;
+    }
+
+    private function insertProfessorsFromRows(array $rows): int
+    {
+        $count = 0;
+
+        foreach ($rows as $index => $row) {
+            // First two rows are headers / merged title.
+            if ($index < 2) {
+                continue;
+            }
+
+            [$nom, $prenom, $discipline] = array_pad($row, 3, null);
+            $nom    = trim((string) $nom);
+            $prenom = trim((string) $prenom);
+            if ($nom === '' || $prenom === '') {
+                continue;
+            }
+
+            if (! $this->enseignantRepository->findByNomPrenom($nom, $prenom)) {
+                $this->enseignantRepository->create([
+                    'nom'        => $nom,
+                    'prenom'     => $prenom,
+                    'specialite' => trim((string) ($discipline ?? '')),
+                ]);
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     public function importMaster(UploadedFile $file): array

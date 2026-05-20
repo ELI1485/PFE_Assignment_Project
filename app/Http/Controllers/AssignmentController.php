@@ -145,12 +145,29 @@ class AssignmentController extends Controller
     public function runAlgorithm(Request $request)
     {
         try {
-            $request->validate([
-                'date_debut' => 'required|date',
+            $validated = $request->validate([
+                'date_debut'    => 'required|date',
+                'nb_jours'      => 'required|integer|min:1|max:30',
+                'creneau_duree' => 'nullable|integer|in:30,45,60,90,120',
+                'matin_actif'   => 'nullable|boolean',
+                'matin_debut'   => 'nullable|date_format:H:i|required_if:matin_actif,1',
+                'matin_fin'     => 'nullable|date_format:H:i|required_if:matin_actif,1|after:matin_debut',
+                'aprem_actif'   => 'nullable|boolean',
+                'aprem_debut'   => 'nullable|date_format:H:i|required_if:aprem_actif,1',
+                'aprem_fin'     => 'nullable|date_format:H:i|required_if:aprem_actif,1|after:aprem_debut',
             ]);
-            $dateDebut = $request->input('date_debut');
 
-            DB::transaction(function () use ($dateDebut) {
+            $dateDebut  = $validated['date_debut'];
+            $nbJours    = (int) $validated['nb_jours'];
+            $duree      = (int) ($validated['creneau_duree'] ?? 60);
+            $slotRanges = $this->buildSlotRanges($request, $duree);
+
+            if (empty($slotRanges)) {
+                return redirect()->route('affectation.index')
+                    ->with('error', 'Veuillez activer au moins une plage horaire (matinée ou après-midi) avec des heures valides.');
+            }
+
+            DB::transaction(function () use ($dateDebut, $nbJours, $slotRanges) {
                 DB::table('jury_enseignant')->delete();
                 Soutenance::query()->delete();
                 Jury::query()->delete();
@@ -158,7 +175,7 @@ class AssignmentController extends Controller
 
                 // Encadrant assignment is done separately via the Affectation workflow.
                 // We trust the existing encadrant_id values on Projet rows.
-                $this->assignmentService->planifierCreneaux($dateDebut);
+                $this->assignmentService->planifierCreneaux($dateDebut, $nbJours, $slotRanges);
                 $this->assignmentService->runAssignment();
                 $this->assignmentService->buildJuries();
             });
@@ -266,6 +283,30 @@ class AssignmentController extends Controller
                 session(['conformite_diagnostic' => $diagnostic]);
                 Storage::put('conformite_diagnostic.json', json_encode($diagnostic));
 
+                // Build a recommendation based on the actually-observed scheduling
+                // throughput. Falls back to a theoretical capacity estimate if no
+                // project at all could be scheduled.
+                $recommendedDays = $this->recommendDays(
+                    $totalProjects,
+                    $scheduledProjects,
+                    $nbJours,
+                    $nbCreneauxParJour ?: count($slotRanges),
+                    max(1, $nbSalles)
+                );
+
+                $recommendation = sprintf(
+                    "Avec %d projet(s) à planifier et la configuration actuelle (%d jours, %d créneaux/jour, %d salle(s)), seuls %d%% des étudiants ont pu être placés. " .
+                        "D'après la cadence observée, il est recommandé d'allouer environ %d jour(s) pour respecter pleinement toutes les contraintes.",
+                    $totalProjects,
+                    $nbJours,
+                    $nbCreneauxParJour ?: count($slotRanges),
+                    max(1, $nbSalles),
+                    $pct,
+                    $recommendedDays
+                );
+
+                session()->flash('planning_recommendation', $recommendation);
+
                 return redirect()->route('planning.results')
                     ->with('warning', "⚠️ Seulement {$pct}% des étudiants ont pu être planifiés ({$affectes}/{$totalEtudiants}). Consultez le <a href=\"" . route('conformite.index') . '" class="alert-link fw-bold">Contrôle de Conformité</a> pour plus de détails.');
             }
@@ -279,6 +320,97 @@ class AssignmentController extends Controller
             return redirect()->route('affectation.index')
                 ->with('error', 'Erreur lors de la génération : ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Build the array of "HH:MM" => "HH:MM" slot ranges from the request,
+     * splitting each enabled period (matinée / après-midi) into chunks
+     * of `$duree` minutes. Returns an empty array when no period is enabled.
+     *
+     * @return array<string,string>
+     */
+    private function buildSlotRanges(Request $request, int $duree): array
+    {
+        $ranges = [];
+
+        if ($request->boolean('matin_actif') && $request->filled('matin_debut') && $request->filled('matin_fin')) {
+            foreach ($this->splitInterval($request->input('matin_debut'), $request->input('matin_fin'), $duree) as $start => $end) {
+                $ranges[$start] = $end;
+            }
+        }
+
+        if ($request->boolean('aprem_actif') && $request->filled('aprem_debut') && $request->filled('aprem_fin')) {
+            foreach ($this->splitInterval($request->input('aprem_debut'), $request->input('aprem_fin'), $duree) as $start => $end) {
+                $ranges[$start] = $end;
+            }
+        }
+
+        ksort($ranges);
+
+        return $ranges;
+    }
+
+    /**
+     * Split a [start, end] window into consecutive sub-intervals of $duree minutes.
+     *
+     * @return array<string,string>
+     */
+    private function splitInterval(string $startTime, string $endTime, int $duree): array
+    {
+        $ranges = [];
+
+        try {
+            $start = \DateTimeImmutable::createFromFormat('H:i', $startTime);
+            $end   = \DateTimeImmutable::createFromFormat('H:i', $endTime);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!$start || !$end || $start >= $end || $duree <= 0) {
+            return [];
+        }
+
+        $cursor = $start;
+        while (true) {
+            $next = $cursor->modify("+{$duree} minutes");
+            if ($next > $end) {
+                break;
+            }
+            $ranges[$cursor->format('H:i')] = $next->format('H:i');
+            $cursor = $next;
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * Recommend a number of days given the achieved scheduling throughput.
+     * Extrapolates from the observed (scheduled / requested) ratio when at
+     * least one project landed; otherwise falls back to a theoretical
+     * capacity-based estimate.
+     */
+    private function recommendDays(
+        int $totalProjects,
+        int $scheduledProjects,
+        int $nbJoursDemandes,
+        int $slotsParJour,
+        int $nbSalles
+    ): int {
+        $nbJoursDemandes = max(1, $nbJoursDemandes);
+        $slotsParJour    = max(1, $slotsParJour);
+        $nbSalles        = max(1, $nbSalles);
+
+        if ($scheduledProjects > 0) {
+            $cadenceParJour = $scheduledProjects / $nbJoursDemandes;
+            $estimation = (int) ceil($totalProjects / max(0.1, $cadenceParJour));
+        } else {
+            // No project landed at all — fall back to theoretical capacity,
+            // discounted by 30% to account for the rest-rule and jury constraints.
+            $capaciteRealistePerDay = max(1, (int) floor($slotsParJour * $nbSalles * 0.7));
+            $estimation = (int) ceil($totalProjects / $capaciteRealistePerDay);
+        }
+
+        return max($nbJoursDemandes + 1, $estimation);
     }
 
     public function showResults()

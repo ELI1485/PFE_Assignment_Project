@@ -56,11 +56,11 @@
         }
 
         .drop-zone {
-            min-height: 210px;
+            min-height: 240px;
             border: 2px dashed #c9d4e5;
             border-radius: 16px;
             background: #fbfcff;
-            padding: 28px 20px;
+            padding: 32px 20px;
             text-align: center;
             cursor: pointer;
             transition: border-color 0.15s ease, background 0.15s ease;
@@ -198,6 +198,26 @@
             gap: 10px;
             justify-content: center;
         }
+
+        .sheet-legend {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .sheet-legend .sheet-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f4f7ff;
+            border: 1px solid #dbe6ff;
+            color: #3159c5;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
     </style>
 @endpush
 
@@ -205,21 +225,14 @@
     <div class="import-page">
         <div class="page-actions">
             <div>
-                <div class="section-subtitle">Chargez les fichiers professeurs et étudiants avant de lancer l'affectation.
+                <div class="section-subtitle">
+                    Téléchargez le modèle Excel unifié, remplissez ses deux feuilles (étudiants et professeurs), puis importez-le ici.
                 </div>
             </div>
             <div class="template-actions">
-                <a href="{{ route('import.template.etudiants') }}" class="btn btn-outline-secondary">
+                <a href="{{ route('import.template') }}" class="btn btn-outline-secondary">
                     <i class="bi bi-download"></i>
-                    Télécharger modèle étudiants complet
-                </a>
-                <a href="{{ route('import.template.etudiants.emails') }}" class="btn btn-outline-secondary">
-                    <i class="bi bi-download"></i>
-                    Télécharger modèle étudiants avec E-mails
-                </a>
-                <a href="{{ route('import.template.profs') }}" class="btn btn-outline-secondary">
-                    <i class="bi bi-download"></i>
-                    Télécharger modèle professeurs
+                    Télécharger le modèle Excel
                 </a>
             </div>
         </div>
@@ -235,69 +248,41 @@
             </div>
         @endif
 
-        <div class="row g-4 align-items-stretch">
-            <div class="col-lg-6">
-                <div class="card import-card h-100">
-                    <div class="import-card-head">
-                        <h2>Liste des étudiants</h2>
-                        <p>Vous pouvez sélectionner plusieurs fichiers Excel, un par filière si nécessaire.</p>
-                    </div>
-                    <div class="import-card-body">
-                        <div class="hint-tag">La filière est détectée automatiquement depuis le nom du fichier.</div>
-
-                        <form action="{{ route('import.etudiants') }}" method="POST" enctype="multipart/form-data"
-                            id="formEtudiants">
-                            @csrf
-
-                            <input type="file" name="file_etudiants[]" id="fileEtu" hidden accept=".xlsx,.xls"
-                                multiple>
-
-                            <div class="drop-zone" id="dropEtu" onclick="document.getElementById('fileEtu').click()">
-                                <div class="drop-symbol"><i class="bi bi-file-earmark-excel"></i></div>
-                                <p class="drop-title">Déposer les fichiers étudiants</p>
-                                <p class="drop-sub">Formats acceptés : .xls, .xlsx</p>
-                                <button type="button" class="btn btn-primary"
-                                    onclick="event.stopPropagation(); document.getElementById('fileEtu').click()">
-                                    Parcourir
-                                </button>
-                                <div id="chosenEtu" class="chosen-files"></div>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary w-100">Importer les étudiants</button>
-                        </form>
-                    </div>
-                </div>
+        <div class="card import-card">
+            <div class="import-card-head">
+                <h2>Importer le fichier Excel unifié</h2>
+                <p>Un seul fichier Excel contenant les deux feuilles attendues : Étudiants et Professeurs.</p>
             </div>
-
-            <div class="col-lg-6">
-                <div class="card import-card h-100">
-                    <div class="import-card-head">
-                        <h2>Liste des professeurs</h2>
-                        <p>Importez le fichier des enseignants, puis revenez ici pour importer les étudiants.</p>
-                    </div>
-                    <div class="import-card-body">
-                        <div class="hint-tag">Format requis : Nom, Prénom, Spécialité à partir de la ligne 3.</div>
-
-                        <form action="{{ route('import.profs') }}" method="POST" enctype="multipart/form-data"
-                            id="formProfesseurs">
-                            @csrf
-                            <input type="file" name="file_profs" id="fileProf" hidden accept=".xlsx,.xls">
-
-                            <div class="drop-zone" id="dropProf" onclick="document.getElementById('fileProf').click()">
-                                <div class="drop-symbol"><i class="bi bi-file-earmark-excel"></i></div>
-                                <p class="drop-title">Déposer le fichier professeurs</p>
-                                <p class="drop-sub">Un seul fichier Excel est attendu.</p>
-                                <button type="button" class="btn btn-primary"
-                                    onclick="event.stopPropagation(); document.getElementById('fileProf').click()">
-                                    Parcourir
-                                </button>
-                                <div id="chosenProf" class="chosen-files"></div>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary w-100">Importer les professeurs</button>
-                        </form>
-                    </div>
+            <div class="import-card-body">
+                <div class="sheet-legend">
+                    <span class="sheet-pill"><i class="bi bi-1-circle"></i> Feuille 1 — Étudiants</span>
+                    <span class="sheet-pill"><i class="bi bi-2-circle"></i> Feuille 2 — Professeurs</span>
                 </div>
+                <div class="hint-tag">
+                    Les données existantes (étudiants, projets, jurys, plannings et enseignants) seront remplacées par le contenu du fichier importé.
+                </div>
+
+                <form action="{{ route('import.unified') }}" method="POST" enctype="multipart/form-data" id="formUnifiedImport">
+                    @csrf
+
+                    <input type="file" name="file" id="fileUnified" hidden accept=".xlsx,.xls">
+
+                    <div class="drop-zone" id="dropUnified" onclick="document.getElementById('fileUnified').click()">
+                        <div class="drop-symbol"><i class="bi bi-file-earmark-excel"></i></div>
+                        <p class="drop-title">Déposer le fichier Excel unifié</p>
+                        <p class="drop-sub">Formats acceptés : .xls, .xlsx — un seul fichier avec deux feuilles.</p>
+                        <button type="button" class="btn btn-primary"
+                            onclick="event.stopPropagation(); document.getElementById('fileUnified').click()">
+                            Parcourir
+                        </button>
+                        <div id="chosenUnified" class="chosen-files"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-cloud-upload"></i>
+                        Importer étudiants et professeurs
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -353,12 +338,9 @@
 
 @push('scripts')
     <script>
-        const fileEtu = document.getElementById('fileEtu');
-        const dropEtu = document.getElementById('dropEtu');
-        const chosenEtu = document.getElementById('chosenEtu');
-        const fileProf = document.getElementById('fileProf');
-        const dropProf = document.getElementById('dropProf');
-        const chosenProf = document.getElementById('chosenProf');
+        const fileUnified  = document.getElementById('fileUnified');
+        const dropUnified  = document.getElementById('dropUnified');
+        const chosenUnified = document.getElementById('chosenUnified');
 
         function showFiles(target, files) {
             if (!files.length) return;
@@ -366,39 +348,24 @@
             target.innerHTML = Array.from(files).map(file => `<div>${file.name}</div>`).join('');
         }
 
-        fileEtu.addEventListener('change', () => showFiles(chosenEtu, fileEtu.files));
-        fileProf.addEventListener('change', () => showFiles(chosenProf, fileProf.files));
+        fileUnified.addEventListener('change', () => showFiles(chosenUnified, fileUnified.files));
 
-        dropEtu.addEventListener('dragover', event => {
+        dropUnified.addEventListener('dragover', event => {
             event.preventDefault();
-            dropEtu.classList.add('dragover');
-        });
-
-        dropProf.addEventListener('dragover', event => {
-            event.preventDefault();
-            dropProf.classList.add('dragover');
+            dropUnified.classList.add('dragover');
         });
 
         ['dragleave', 'drop'].forEach(eventName => {
-            dropEtu.addEventListener(eventName, () => dropEtu.classList.remove('dragover'));
-            dropProf.addEventListener(eventName, () => dropProf.classList.remove('dragover'));
+            dropUnified.addEventListener(eventName, () => dropUnified.classList.remove('dragover'));
         });
 
-        dropEtu.addEventListener('drop', event => {
-            event.preventDefault();
-            const transfer = new DataTransfer();
-            Array.from(event.dataTransfer.files).forEach(file => transfer.items.add(file));
-            fileEtu.files = transfer.files;
-            showFiles(chosenEtu, transfer.files);
-        });
-
-        dropProf.addEventListener('drop', event => {
+        dropUnified.addEventListener('drop', event => {
             event.preventDefault();
             if (!event.dataTransfer.files.length) return;
             const transfer = new DataTransfer();
             transfer.items.add(event.dataTransfer.files[0]);
-            fileProf.files = transfer.files;
-            showFiles(chosenProf, transfer.files);
+            fileUnified.files = transfer.files;
+            showFiles(chosenUnified, transfer.files);
         });
 
         // ── Reset DB modal ──
