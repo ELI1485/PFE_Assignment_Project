@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PFE Assignment Project — PR Changes Summary</title>
+<style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+        margin: 0;
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+        color: #0f172a;
+        background: #f8fafc;
+        line-height: 1.55;
+        font-size: 15px;
+    }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace; }
+
+    .page { max-width: 1180px; margin: 0 auto; padding: 48px 28px 72px; }
+
+    .hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%);
+        color: #fff;
+        border-radius: 18px;
+        padding: 36px 40px;
+        box-shadow: 0 24px 60px -28px rgba(15, 23, 42, 0.45);
+        position: relative;
+        overflow: hidden;
+    }
+    .hero::after {
+        content: "";
+        position: absolute;
+        right: -120px; top: -120px;
+        width: 320px; height: 320px;
+        border-radius: 50%;
+        background: radial-gradient(circle at center, rgba(255,255,255,0.18), transparent 70%);
+        pointer-events: none;
+    }
+    .hero h1 {
+        margin: 0 0 8px;
+        font-size: 1.75rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+    .hero .subtitle {
+        color: rgba(255,255,255,0.78);
+        font-size: 0.95rem;
+        max-width: 720px;
+    }
+    .commit-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    .commit-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.18);
+        font-size: 0.78rem;
+        font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+        color: #e2e8f0;
+        letter-spacing: 0.02em;
+    }
+    .commit-chip strong { color: #fff; font-weight: 700; }
+    .commit-chip.arrow { color: rgba(255,255,255,0.55); padding: 6px 4px; background: transparent; border: 0; }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 14px;
+        margin-top: 28px;
+    }
+    .stat {
+        background: #fff;
+        border-radius: 14px;
+        padding: 18px 20px;
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 8px 22px -12px rgba(15, 23, 42, 0.12);
+        border: 1px solid #eef2f7;
+    }
+    .stat .label {
+        color: #64748b;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 6px;
+    }
+    .stat .value {
+        font-size: 1.65rem;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+    }
+    .stat .delta { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+    .stat.good .value { color: #16a34a; }
+    .stat.bad .value { color: #dc2626; }
+    .stat.info .value { color: #2563eb; }
+    .stat.muted .value { color: #475569; }
+
+    .section { margin-top: 48px; }
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.2rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0 0 20px;
+        color: #0f172a;
+    }
+    .section-title::before {
+        content: "";
+        width: 6px;
+        height: 22px;
+        border-radius: 4px;
+        background: linear-gradient(180deg, #2563eb, #1e3a8a);
+    }
+
+    .file-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 18px 22px;
+        margin-bottom: 14px;
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+        transition: border-color 0.15s ease;
+    }
+    .file-card:hover { border-color: #cbd5e1; }
+    .file-card.deleted { background: #fff7f7; border-color: #fecaca; }
+    .file-card.added   { background: #f0fdf4; border-color: #bbf7d0; }
+
+    .file-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    .file-path {
+        font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #0f172a;
+        word-break: break-all;
+    }
+    .file-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .tag-added { background: #dcfce7; color: #15803d; }
+    .tag-removed { background: #fee2e2; color: #b91c1c; }
+    .tag-modified { background: #dbeafe; color: #1d4ed8; }
+    .tag-renamed { background: #fef3c7; color: #b45309; }
+
+    .file-note {
+        color: #475569;
+        font-size: 0.85rem;
+        margin: 0 0 10px;
+    }
+
+    .change-list {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    @media (min-width: 720px) {
+        .change-list.two-col { grid-template-columns: 1fr 1fr; }
+    }
+
+    .change-block {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 14px;
+    }
+    .change-block.add { background: #ecfdf5; border-color: #a7f3d0; }
+    .change-block.rem { background: #fef2f2; border-color: #fecaca; }
+    .change-block.kept { background: #f8fafc; border-color: #e2e8f0; }
+    .change-block.const { background: #eff6ff; border-color: #bfdbfe; }
+
+    .change-block .legend {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+    .change-block.add .legend { color: #15803d; }
+    .change-block.rem .legend { color: #b91c1c; }
+    .change-block.kept .legend { color: #475569; }
+    .change-block.const .legend { color: #1d4ed8; }
+
+    .change-block ul {
+        margin: 0;
+        padding-left: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .change-block li {
+        font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+        font-size: 0.81rem;
+        color: #0f172a;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+    .change-block.add li::before { content: "+"; color: #15803d; font-weight: 800; }
+    .change-block.rem li::before { content: "−"; color: #b91c1c; font-weight: 800; }
+    .change-block.kept li::before { content: "·"; color: #94a3b8; font-weight: 800; }
+    .change-block.const li::before { content: "◆"; color: #2563eb; font-size: 0.7rem; }
+
+    .change-block .scope {
+        color: #64748b;
+        font-style: italic;
+        font-family: inherit;
+        font-size: 0.78rem;
+    }
+
+    .totals-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 22px 24px;
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+    }
+    table.totals { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    table.totals th, table.totals td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid #eef2f7;
+    }
+    table.totals thead th {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748b;
+        font-weight: 700;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    table.totals tbody tr:last-child td { border-bottom: 0; }
+    table.totals td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+    table.totals td.add  { color: #15803d; }
+    table.totals td.rem  { color: #b91c1c; }
+
+    .name-list {
+        font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        color: #1e293b;
+        background: #f8fafc;
+        padding: 14px 16px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        line-height: 1.7;
+    }
+    .name-list .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 6px;
+        margin: 2px 4px 2px 0;
+    }
+    .name-list .pill.add { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .name-list .pill.rem { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+    footer {
+        margin-top: 56px;
+        padding-top: 24px;
+        border-top: 1px solid #e2e8f0;
+        color: #94a3b8;
+        font-size: 0.82rem;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    @media print {
+        body { background: #fff; }
+        .hero { box-shadow: none; }
+        .file-card { break-inside: avoid; }
+        .stat, .totals-card, .file-card { box-shadow: none !important; }
+    }
+</style>
+</head>
+<body>
+
+<main class="page">
+
+<header class="hero">
+    <h1>PFE Assignment Project — Pull Request Summary</h1>
+    <p class="subtitle">
+        Cumulative changes between <strong>main</strong> and the PR branch. Includes the two pre-existing commits on
+        <code>refactor/unified-import-and-custom-planning</code> plus six follow-up commits that fix the planning
+        regression, surface configuration end-to-end, and clean up dead code.
+    </p>
+
+    <div class="commit-row">
+        <span class="commit-chip"><span>base</span><strong>45e6a39</strong><span style="opacity:.7;">main</span></span>
+        <span class="commit-chip arrow">→</span>
+        <span class="commit-chip"><strong>56a7722</strong><span style="opacity:.7;">unified import + custom planning</span></span>
+        <span class="commit-chip arrow">→</span>
+        <span class="commit-chip"><strong>f343a5a</strong></span>
+        <span class="commit-chip arrow">→</span>
+        <span class="commit-chip"><strong>5486f52 → 2078514</strong><span style="opacity:.7;">6 commits</span></span>
+        <span class="commit-chip arrow">→</span>
+        <span class="commit-chip"><span>head</span><strong>2078514</strong></span>
+    </div>
+</header>
+
+<section class="stats">
+    <div class="stat info">
+        <div class="label">Files touched</div>
+        <div class="value">31</div>
+        <div class="delta">+2,071 / −682 lines</div>
+    </div>
+    <div class="stat good">
+        <div class="label">PHP methods added</div>
+        <div class="value">14</div>
+    </div>
+    <div class="stat bad">
+        <div class="label">PHP methods removed</div>
+        <div class="value">17</div>
+    </div>
+    <div class="stat info">
+        <div class="label">JS named functions added</div>
+        <div class="value">3</div>
+    </div>
+    <div class="stat info">
+        <div class="label">Class constants added</div>
+        <div class="value">6</div>
+    </div>
+    <div class="stat muted">
+        <div class="label">Routes</div>
+        <div class="value">+2 / −6</div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">.kiro/steering/</h2>
+
+    <div class="file-card added">
+        <div class="file-head">
+            <span class="file-path">.kiro/steering/product.md</span>
+            <span class="file-tag tag-added">Added</span>
+        </div>
+        <p class="file-note">Steering doc — no methods.</p>
+    </div>
+    <div class="file-card added">
+        <div class="file-head">
+            <span class="file-path">.kiro/steering/structure.md</span>
+            <span class="file-tag tag-added">Added</span>
+        </div>
+        <p class="file-note">Steering doc — no methods.</p>
+    </div>
+    <div class="file-card added">
+        <div class="file-head">
+            <span class="file-path">.kiro/steering/tech.md</span>
+            <span class="file-tag tag-added">Added</span>
+        </div>
+        <p class="file-note">Steering doc — no methods.</p>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">app/Http/Controllers/</h2>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">AssignmentController.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added (private)</div>
+                <ul>
+                    <li>buildSlotRanges()</li>
+                    <li>splitInterval()</li>
+                    <li>recommendDays()</li>
+                </ul>
+            </div>
+            <div class="change-block kept">
+                <div class="legend">Kept · constructor reshuffled</div>
+                <ul>
+                    <li>__construct() <span class="scope">— now injects VerificationService instead of PdfExportService</span></li>
+                    <li>dashboard()</li>
+                    <li>showAffectation()</li>
+                    <li>runAffectation()</li>
+                    <li>affectationHistory()</li>
+                    <li>runAlgorithm()</li>
+                    <li>showResults()</li>
+                    <li>planningHistory()</li>
+                    <li>downloadSnapshot()</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">ConformiteController.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Method set unchanged — only body deltas (renders <code>config</code> field of the diagnostic).</p>
+        <div class="change-block kept">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>index()</li>
+                <li>buildLiveDiagnostic()</li>
+                <li>canonicalProjectsCount()</li>
+                <li>normalizeDiagnostic()</li>
+                <li>projectForStudent()</li>
+                <li>scheduledStudentIds()</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">ImportController.php</span>
+            <span class="file-tag tag-modified">Modified · heavy</span>
+        </div>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added</div>
+                <ul>
+                    <li>importUnified() <span class="scope">public</span></li>
+                    <li>downloadTemplate() <span class="scope">public</span></li>
+                    <li>generateUnifiedTemplate() <span class="scope">private</span></li>
+                    <li>styleHeaderRow() <span class="scope">private</span></li>
+                </ul>
+            </div>
+            <div class="change-block rem">
+                <div class="legend">Removed</div>
+                <ul>
+                    <li>importEtudiants() <span class="scope">public</span></li>
+                    <li>importProfs() <span class="scope">public</span></li>
+                    <li>importMaster() <span class="scope">public</span></li>
+                    <li>downloadEtudiantsTemplate() <span class="scope">public</span></li>
+                    <li>downloadEtudiantsEmailsTemplate() <span class="scope">public</span></li>
+                    <li>downloadProfesseursTemplate() <span class="scope">public</span></li>
+                    <li>detectFiliere() <span class="scope">private</span></li>
+                    <li>detectWrongFileType() <span class="scope">private</span></li>
+                    <li>matchesSignatures() <span class="scope">private</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="change-block kept" style="margin-top:8px;">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>__construct()</li>
+                <li>showForm()</li>
+                <li>resetDatabase()</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">VerificationController.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Method set unchanged. Constructor signature extended to also inject <code>HistoryService</code>; <code>index()</code> now returns a richer payload to the view.</p>
+        <div class="change-block kept">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>__construct() <span class="scope">— now also injects HistoryService</span></li>
+                <li>index()</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">app/Models/</h2>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">Enseignant.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Method set unchanged. <code>$fillable</code> field rename: <em>specialite → discipline</em>.</p>
+        <div class="change-block kept">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>projets()</li>
+                <li>jurys()</li>
+                <li>soutenances()</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">Etudiant.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Removed two unused relations and trimmed dead fillable fields (<em>email_personnel</em>, <em>email_academique</em>).</p>
+        <div class="change-block rem">
+            <div class="legend">Removed</div>
+            <ul>
+                <li>projet() <span class="scope">hasOne — never used</span></li>
+                <li>projets() <span class="scope">hasMany — never used</span></li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">app/Repositories/</h2>
+
+    <div class="file-card deleted">
+        <div class="file-head">
+            <span class="file-path">EtudiantRepository.php</span>
+            <span class="file-tag tag-removed">Deleted file</span>
+        </div>
+        <p class="file-note">No callers remained after the unified import refactor; safe to drop entirely.</p>
+        <div class="change-block rem">
+            <div class="legend">Removed</div>
+            <ul>
+                <li>create()</li>
+                <li>findByCne()</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">app/Services/</h2>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">AssignmentService.php</span>
+            <span class="file-tag tag-modified">Modified · core</span>
+        </div>
+        <p class="file-note">
+            Critical regression fix in <code>isInfoProfessor()</code> (was reading the non-existent
+            <em>specialite</em> column instead of <em>discipline</em>) plus the early-exit / load-pruning
+            performance work in <code>findBestPackage()</code>. Calendar walker now skips excluded dates.
+        </p>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added (private)</div>
+                <ul>
+                    <li>defaultSlotRanges()</li>
+                    <li>isLexicographicallySmaller()</li>
+                </ul>
+            </div>
+            <div class="change-block rem">
+                <div class="legend">Removed (private)</div>
+                <ul>
+                    <li>officialSlotRanges()</li>
+                </ul>
+            </div>
+        </div>
+        <div class="change-block kept" style="margin-top:8px;">
+            <div class="legend">Signature changes (kept)</div>
+            <ul>
+                <li>planifierCreneaux($dateDebut, $nbJours, $slotRanges, <strong>$excludedDates = []</strong>)</li>
+                <li>workingDates($dateDebut, $days, <strong>$excludedDates = []</strong>)</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">ExcelImportService.php</span>
+            <span class="file-tag tag-modified">Modified · refactor</span>
+        </div>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added</div>
+                <ul>
+                    <li>importUnified() <span class="scope">public</span></li>
+                    <li>insertStudentsFromRows() <span class="scope">private</span></li>
+                    <li>insertProfessorsFromRows() <span class="scope">private</span></li>
+                </ul>
+            </div>
+            <div class="change-block rem">
+                <div class="legend">Removed</div>
+                <ul>
+                    <li>import() <span class="scope">public</span></li>
+                    <li>importMaster() <span class="scope">public</span></li>
+                    <li>importEncadrants() <span class="scope">public</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="change-block kept" style="margin-top:8px;">
+            <div class="legend">Kept · constructor signature trimmed</div>
+            <ul>
+                <li>__construct() <span class="scope">— EtudiantRepository dependency dropped</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">HistoryService.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note"><code>save()</code> and <code>formatSnapshot()</code> now persist and round-trip an optional <code>config</code> field, so views can show the parameters used.</p>
+        <div class="change-block kept">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>save()</li>
+                <li>all()</li>
+                <li>find()</li>
+                <li>latest()</li>
+                <li>formatSnapshot()</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">PdfExportService.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">
+            <code>applyFiliereColor()</code> rewritten — short codes <em>GI</em>/<em>ID</em> from the unified
+            import now resolve to the correct background color across the PV dashboard, the PDF snapshots,
+            and the Word export.
+        </p>
+        <div class="change-list two-col">
+            <div class="change-block const">
+                <div class="legend">Added constants</div>
+                <ul>
+                    <li>COLOR_TDIA = '#C6EFCE'</li>
+                    <li>COLOR_ID&nbsp;&nbsp;&nbsp;= '#F4B183'</li>
+                    <li>COLOR_GI&nbsp;&nbsp;&nbsp;= '#BDD7EE'</li>
+                    <li>COLOR_NONE = '#ffffff'</li>
+                </ul>
+            </div>
+            <div class="change-block kept">
+                <div class="legend">Kept</div>
+                <ul>
+                    <li>__construct()</li>
+                    <li>applyFiliereColor() <span class="scope">static</span></li>
+                    <li>getProfessorColor() <span class="scope">static</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">VerificationService.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">
+            Audit no longer hardcodes <em>jury size = 3</em>: the expected size is derived from the actual
+            soutenances. Service exposes the rules it actually checks so the view stays in sync.
+        </p>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added (private)</div>
+                <ul>
+                    <li>detectExpectedJurySize()</li>
+                    <li>planningRulesFor()</li>
+                </ul>
+            </div>
+            <div class="change-block const">
+                <div class="legend">Added constants</div>
+                <ul>
+                    <li>ENCADREMENT_MIN = 3</li>
+                    <li>ENCADREMENT_MAX = 4</li>
+                </ul>
+            </div>
+        </div>
+        <div class="change-block kept" style="margin-top:8px;">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>checkAffectations() <span class="scope">— returns extra <code>rules</code></span></li>
+                <li>checkPlannings() <span class="scope">— returns extra <code>rules</code>, <code>expected_jury_size</code>, <code>soutenances_count</code></span></li>
+                <li>detectJuryComposition() <span class="scope">— gained <code>$expectedJurySize</code> param</span></li>
+                <li>detectRestViolations()</li>
+                <li>detectRoomSaturation()</li>
+                <li>detectJuryLoadImbalance()</li>
+                <li>slotOrder()</li>
+                <li>getSlotIndex()</li>
+                <li>formatSlotTime()</li>
+                <li>professorLabel()</li>
+                <li>isInfoProfessor()</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">WordExportService.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Method set unchanged — body changes only. Benefits automatically from the <code>applyFiliereColor()</code> fix in <code>PdfExportService</code>.</p>
+        <div class="change-block kept">
+            <div class="legend">Kept</div>
+            <ul>
+                <li>__construct()</li>
+                <li>downloadSnapshot()</li>
+                <li>downloadLivePlanning()</li>
+                <li>downloadLiveAffectation()</li>
+                <li>addPlanningTable()</li>
+                <li>addAffectationTable()</li>
+                <li>cleanProfessorPrefix()</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">database, public, routes</h2>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">database/migrations/2026_05_04_193626_create_enseignants_table.php</span>
+            <span class="file-tag tag-renamed">Schema rename</span>
+        </div>
+        <p class="file-note">Column <code>specialite</code> → <code>discipline</code>. No methods.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">public/css/app-theme.css</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">CSS additions only.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">public/templates/</span>
+            <span class="file-tag tag-modified">Reorganised</span>
+        </div>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added file</div>
+                <ul>
+                    <li>excel_template.xlsx</li>
+                </ul>
+            </div>
+            <div class="change-block rem">
+                <div class="legend">Removed files</div>
+                <ul>
+                    <li>template_enseignant.xlsx</li>
+                    <li>template_etudiants.xlsx</li>
+                    <li>template_etudiants_email.xlsx</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">routes/web.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added routes</div>
+                <ul>
+                    <li>POST /import/unified <span class="scope">import.unified</span></li>
+                    <li>GET&nbsp;&nbsp;/import/template <span class="scope">import.template</span></li>
+                </ul>
+            </div>
+            <div class="change-block rem">
+                <div class="legend">Removed routes</div>
+                <ul>
+                    <li>POST /import/master <span class="scope">import.master</span></li>
+                    <li>POST /import/etudiants <span class="scope">import.etudiants</span></li>
+                    <li>POST /import/profs <span class="scope">import.profs</span></li>
+                    <li>GET&nbsp;&nbsp;/import/templates/etudiants <span class="scope">import.template.etudiants</span></li>
+                    <li>GET&nbsp;&nbsp;/import/templates/etudiants-emails <span class="scope">import.template.etudiants.emails</span></li>
+                    <li>GET&nbsp;&nbsp;/import/templates/professeurs <span class="scope">import.template.profs</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">resources/views/</h2>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">affectation/index.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Audit-warning banner added at the top, linking to the audit page when affectation anomalies are detected.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">conformite/index.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Added "Audit des Contraintes" CTA button + new "Configuration testée" Blade card showing the parameters the user attempted.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">import.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">UI rewritten to drive the new unified Excel import path.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">partials/planning-start-modal.blade.php</span>
+            <span class="file-tag tag-modified">Modified · biggest view delta</span>
+        </div>
+        <p class="file-note">
+            Modal restyled with proper sections (Période, Plages horaires, Dates à exclure), header/footer, and slot
+            cards. New excluded-dates chip-list manager with three named JS functions plus three event-listener
+            closures.
+        </p>
+        <div class="change-list two-col">
+            <div class="change-block add">
+                <div class="legend">Added (JS named)</div>
+                <ul>
+                    <li>renderEmpty()</li>
+                    <li>formatHuman(iso)</li>
+                    <li>addDate(iso)</li>
+                </ul>
+            </div>
+            <div class="change-block kept">
+                <div class="legend">Closures · anonymous</div>
+                <ul>
+                    <li>chip-remove · click</li>
+                    <li>add-button · click</li>
+                    <li>date input · keydown (Enter)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">pdf/planning_snapshot.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Layout / styling updates. No PHP/JS functions.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">planning/history.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">New "Configuration" column showing config chips per row (start date, days, jury size, excluded-date count).</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">planning/results.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">Added "Configuration utilisée" Blade card and a partial-planning warning banner.</p>
+    </div>
+
+    <div class="file-card">
+        <div class="file-head">
+            <span class="file-path">verification/index.blade.php</span>
+            <span class="file-tag tag-modified">Modified</span>
+        </div>
+        <p class="file-note">
+            Replaced static text with dynamic rendering of <code>affectationRules</code> / <code>planningRules</code>;
+            added a 4-tile summary header and a "Paramètres du planning courant" config block.
+        </p>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title">Totals</h2>
+
+    <div class="totals-card">
+        <table class="totals">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th class="num" style="text-align:right;">Added</th>
+                    <th class="num" style="text-align:right;">Removed</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>PHP methods (named)</td>
+                    <td class="num add">14</td>
+                    <td class="num rem">17</td>
+                </tr>
+                <tr>
+                    <td>JS named functions</td>
+                    <td class="num add">3</td>
+                    <td class="num">0</td>
+                </tr>
+                <tr>
+                    <td>Class constants</td>
+                    <td class="num add">6</td>
+                    <td class="num">0</td>
+                </tr>
+                <tr>
+                    <td>Routes</td>
+                    <td class="num add">2</td>
+                    <td class="num rem">6</td>
+                </tr>
+                <tr>
+                    <td>Files added / deleted</td>
+                    <td class="num add">4</td>
+                    <td class="num rem">4</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 style="margin-top: 28px; font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em;">Method names · added (14)</h3>
+    <div class="name-list" style="margin-top:10px;">
+        <span class="pill add">AssignmentController::buildSlotRanges</span>
+        <span class="pill add">AssignmentController::splitInterval</span>
+        <span class="pill add">AssignmentController::recommendDays</span>
+        <span class="pill add">ImportController::importUnified</span>
+        <span class="pill add">ImportController::downloadTemplate</span>
+        <span class="pill add">ImportController::generateUnifiedTemplate</span>
+        <span class="pill add">ImportController::styleHeaderRow</span>
+        <span class="pill add">AssignmentService::defaultSlotRanges</span>
+        <span class="pill add">AssignmentService::isLexicographicallySmaller</span>
+        <span class="pill add">ExcelImportService::importUnified</span>
+        <span class="pill add">ExcelImportService::insertStudentsFromRows</span>
+        <span class="pill add">ExcelImportService::insertProfessorsFromRows</span>
+        <span class="pill add">VerificationService::detectExpectedJurySize</span>
+        <span class="pill add">VerificationService::planningRulesFor</span>
+    </div>
+
+    <h3 style="margin-top: 22px; font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em;">Method names · removed (17)</h3>
+    <div class="name-list" style="margin-top:10px;">
+        <span class="pill rem">ImportController::importEtudiants</span>
+        <span class="pill rem">ImportController::importProfs</span>
+        <span class="pill rem">ImportController::importMaster</span>
+        <span class="pill rem">ImportController::downloadEtudiantsTemplate</span>
+        <span class="pill rem">ImportController::downloadEtudiantsEmailsTemplate</span>
+        <span class="pill rem">ImportController::downloadProfesseursTemplate</span>
+        <span class="pill rem">ImportController::detectFiliere</span>
+        <span class="pill rem">ImportController::detectWrongFileType</span>
+        <span class="pill rem">ImportController::matchesSignatures</span>
+        <span class="pill rem">Etudiant::projet</span>
+        <span class="pill rem">Etudiant::projets</span>
+        <span class="pill rem">EtudiantRepository::create</span>
+        <span class="pill rem">EtudiantRepository::findByCne</span>
+        <span class="pill rem">AssignmentService::officialSlotRanges</span>
+        <span class="pill rem">ExcelImportService::import</span>
+        <span class="pill rem">ExcelImportService::importMaster</span>
+        <span class="pill rem">ExcelImportService::importEncadrants</span>
+    </div>
+</section>
+
+<footer>
+    <span>Generated for the PFE Assignment Project pull request.</span>
+    <span><code>main · 45e6a39</code> &nbsp;→&nbsp; <code>HEAD · 2078514</code></span>
+</footer>
+
+</main>
+
+</body>
+</html>
