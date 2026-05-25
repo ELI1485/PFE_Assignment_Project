@@ -305,20 +305,23 @@ class AssignmentService
             return null;
         }
 
+        $nbRapporteurs = max(1, $nbJurys - 1);
         $minDailyLoad = PHP_INT_MAX;
         $minSlotLoad = PHP_INT_MAX;
         $best = null;
 
         foreach ($creneaux as $creneau) {
-            $slotIndex = $this->getSlotIndex($creneau, $slotOrder);
-            if ($slotIndex === null) {
+            // Cheap pruning first: drop creneaux whose encadrant daily load
+            // is already worse than the current best, before doing any
+            // schedule scan.
+            $date = $creneau->date->format('Y-m-d');
+            $encadrantDailyLoad = $state['profDailyCount'][$encadrant->id][$date] ?? 0;
+            if ($encadrantDailyLoad > $minDailyLoad) {
                 continue;
             }
 
-            $date = $creneau->date->format('Y-m-d');
-            $encadrantDailyLoad = $state['profDailyCount'][$encadrant->id][$date] ?? 0;
-
-            if ($encadrantDailyLoad > $minDailyLoad) {
+            $slotIndex = $this->getSlotIndex($creneau, $slotOrder);
+            if ($slotIndex === null) {
                 continue;
             }
 
@@ -340,16 +343,9 @@ class AssignmentService
             }
 
             $available = $allProfessors
-                ->filter(fn(Enseignant $professor) => $professor->id !== $encadrant->id)
-                ->filter(fn(Enseignant $professor) => $this->isProfessorAvailable(
-                    $professor->id,
-                    $date,
-                    $slotIndex,
-                    $state
-                ))
+                ->filter(fn(Enseignant $professor) => $professor->id !== $encadrant->id
+                    && $this->isProfessorAvailable($professor->id, $date, $slotIndex, $state))
                 ->values();
-
-            $nbRapporteurs = max(1, $nbJurys - 1);
 
             if ($available->count() < $nbRapporteurs) {
                 continue;
@@ -367,6 +363,13 @@ class AssignmentService
             ];
             $minDailyLoad = $encadrantDailyLoad;
             $minSlotLoad = $slotLoad;
+
+            // (0,0) is the absolute optimum — nothing can beat it, so we can
+            // exit early. This dramatically speeds up generation when the
+            // encadrant has free days available.
+            if ($minDailyLoad === 0 && $minSlotLoad === 0) {
+                break;
+            }
         }
 
         return $best;
@@ -739,6 +742,6 @@ class AssignmentService
 
     private function isInfoProfessor(Enseignant $professor): bool
     {
-        return str_contains(strtolower($professor->specialite ?? ''), 'info');
+        return str_contains(strtolower($professor->discipline ?? ''), 'info');
     }
 }

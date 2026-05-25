@@ -14,7 +14,6 @@ Route::get('/', [AssignmentController::class, 'dashboard'])->name('dashboard');
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 Route::get('/import', [ImportController::class, 'showForm'])->name('import.form');
-Route::post('/import/master', [ImportController::class, 'importMaster'])->name('import.master');
 Route::post('/import/unified', [ImportController::class, 'importUnified'])->name('import.unified');
 Route::get('/import/template', [ImportController::class, 'downloadTemplate'])->name('import.template');
 Route::post('/import/reset-database', [ImportController::class, 'resetDatabase'])->name('import.reset-db');

@@ -23,7 +23,6 @@ class AssignmentController extends Controller
 {
     public function __construct(
         protected AssignmentService $assignmentService,
-        protected PdfExportService $pdfExportService,
         protected HistoryService $historyService,
     ) {}
 

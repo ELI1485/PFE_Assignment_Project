@@ -29,20 +29,6 @@ class ImportController extends Controller
         ]);
     }
 
-    public function importMaster(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls|max:5000',
-        ]);
-
-        $results = $this->importService->importMaster($request->file('file'));
-
-        return redirect()->route('affectation.index')->with(
-            'success',
-            "Importation terminée : {$results['etudiants']} étudiants, {$results['enseignants']} enseignants, {$results['salles']} salles."
-        );
-    }
-
     /**
      * Unified import: a single Excel file containing exactly 4 sheets:
      *  - Sheet 1: Students GI
