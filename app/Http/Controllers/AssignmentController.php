@@ -293,6 +293,17 @@ class AssignmentController extends Controller
                     'nb_dates' => $nbDates,
                     'capacite_max' => $capaciteMax,
                     'manque_capacite' => max(0, $totalProjects - $capaciteMax),
+                    // Echo back the planning configuration that was attempted
+                    // so the conformité page can show "voici ce que vous avez
+                    // essayé" instead of forcing the user to remember.
+                    'config' => [
+                        'date_debut'    => $dateDebut,
+                        'nb_jours'      => $nbJours,
+                        'creneau_duree' => $duree,
+                        'nb_jurys'      => $nbJurys,
+                        'slot_ranges'   => $slotRanges,
+                        'dates_exclues' => $excludedDates,
+                    ],
                     'etudiants_manquants' => $etudiantsNonAffectes->map(function ($e) {
                         $projet = $this->projectForStudent($e);
 

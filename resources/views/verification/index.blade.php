@@ -37,6 +37,52 @@
         font-size: 0.86rem;
     }
     .rules-list li { margin-bottom: 6px; }
+
+    .audit-context {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        box-shadow: var(--shadow-soft);
+    }
+    .audit-context-title {
+        color: var(--heading);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }
+    .audit-context-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px 22px;
+        font-size: 0.86rem;
+    }
+    .audit-context-grid > div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .audit-context-label {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .audit-context-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        margin: 2px 4px 2px 0;
+        border-radius: 999px;
+        background: var(--ensah-blue-soft);
+        color: var(--ensah-blue);
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+    .audit-context-chip.warn { background: #fef3c7; color: #b45309; }
 </style>
 @endpush
 
@@ -61,6 +107,55 @@
         </div>
     </div>
 </div>
+
+@if($planningConfig)
+<div class="audit-context">
+    <div class="audit-context-title">
+        <i class="bi bi-sliders me-1"></i>
+        Paramètres du planning courant
+    </div>
+    <div class="audit-context-grid">
+        @if(!empty($planningConfig['date_debut']))
+            <div>
+                <span class="audit-context-label">Début</span>
+                <span>{{ \Illuminate\Support\Carbon::parse($planningConfig['date_debut'])->format('d/m/Y') }}</span>
+            </div>
+        @endif
+        @if(!empty($planningConfig['nb_jours']))
+            <div>
+                <span class="audit-context-label">Jours demandés</span>
+                <span>{{ $planningConfig['nb_jours'] }}</span>
+            </div>
+        @endif
+        @if(!empty($planningConfig['creneau_duree']))
+            <div>
+                <span class="audit-context-label">Durée créneau</span>
+                <span>{{ $planningConfig['creneau_duree'] }} min</span>
+            </div>
+        @endif
+        @if(!empty($planningConfig['slot_ranges']))
+            <div>
+                <span class="audit-context-label">Plages horaires</span>
+                <span>
+                    @foreach($planningConfig['slot_ranges'] as $start => $end)
+                        <span class="audit-context-chip">{{ $start }}–{{ $end }}</span>
+                    @endforeach
+                </span>
+            </div>
+        @endif
+        @if(!empty($planningConfig['dates_exclues']))
+            <div>
+                <span class="audit-context-label">Dates exclues</span>
+                <span>
+                    @foreach($planningConfig['dates_exclues'] as $iso)
+                        <span class="audit-context-chip warn">{{ \Illuminate\Support\Carbon::parse($iso)->format('d/m/Y') }}</span>
+                    @endforeach
+                </span>
+            </div>
+        @endif
+    </div>
+</div>
+@endif
 
 <div class="row g-4">
     <div class="col-lg-6">

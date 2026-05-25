@@ -16,6 +16,52 @@
     .anomaly-card.ok .anomaly-title { color: #16a34a; }
     .anomaly-desc { color: var(--muted); font-size: 0.86rem; line-height: 1.55; }
     .badge-filiere { padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+
+    .conformite-config {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 18px;
+        box-shadow: var(--shadow-soft);
+    }
+    .conformite-config-title {
+        color: var(--heading);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+    .conformite-config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px 22px;
+        font-size: 0.86rem;
+    }
+    .conformite-config-grid > div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--heading);
+    }
+    .conformite-config-label {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .conformite-config-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        margin: 2px 4px 2px 0;
+        border-radius: 999px;
+        background: var(--ensah-blue-soft);
+        color: var(--ensah-blue);
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+    .conformite-config-chip.warn { background: #fef3c7; color: #b45309; }
 </style>
 @endpush
 
@@ -56,6 +102,44 @@
         </div>
         <div class="anomaly-desc" style="white-space: pre-line;">{{ session('planning_recommendation') }}</div>
     </div>
+@endif
+
+@if(is_array($diagnostic['config'] ?? null))
+@php $cfg = $diagnostic['config']; @endphp
+<div class="conformite-config mb-4">
+    <div class="conformite-config-title">
+        <i class="bi bi-sliders me-1"></i>
+        Configuration testée
+    </div>
+    <div class="conformite-config-grid">
+        @if(!empty($cfg['date_debut']))
+            <div><span class="conformite-config-label">Début</span><span>{{ \Illuminate\Support\Carbon::parse($cfg['date_debut'])->format('d/m/Y') }}</span></div>
+        @endif
+        @if(!empty($cfg['nb_jours']))
+            <div><span class="conformite-config-label">Jours demandés</span><span>{{ $cfg['nb_jours'] }}</span></div>
+        @endif
+        @if(!empty($cfg['creneau_duree']))
+            <div><span class="conformite-config-label">Durée créneau</span><span>{{ $cfg['creneau_duree'] }} min</span></div>
+        @endif
+        @if(!empty($cfg['nb_jurys']))
+            <div><span class="conformite-config-label">Membres jury</span><span>{{ $cfg['nb_jurys'] }}</span></div>
+        @endif
+        @if(!empty($cfg['slot_ranges']))
+            <div><span class="conformite-config-label">Plages</span><span>
+                @foreach($cfg['slot_ranges'] as $s => $e)
+                    <span class="conformite-config-chip">{{ $s }}–{{ $e }}</span>
+                @endforeach
+            </span></div>
+        @endif
+        @if(!empty($cfg['dates_exclues']))
+            <div><span class="conformite-config-label">Dates exclues</span><span>
+                @foreach($cfg['dates_exclues'] as $iso)
+                    <span class="conformite-config-chip warn">{{ \Illuminate\Support\Carbon::parse($iso)->format('d/m/Y') }}</span>
+                @endforeach
+            </span></div>
+        @endif
+    </div>
+</div>
 @endif
 
 @if($diagnostic === null)

@@ -2,21 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\HistoryService;
 use App\Services\VerificationService;
 
 class VerificationController extends Controller
 {
-    protected VerificationService $verificationService;
-
-    public function __construct(VerificationService $verificationService)
-    {
-        $this->verificationService = $verificationService;
-    }
+    public function __construct(
+        protected VerificationService $verificationService,
+        protected HistoryService $historyService,
+    ) {}
 
     public function index()
     {
         $affectationData = $this->verificationService->checkAffectations();
         $planningData = $this->verificationService->checkPlannings();
+
+        // Pull the active planning's persisted config so the audit page
+        // can show concrete details (start date, days, excluded dates)
+        // alongside the abstract rules being checked.
+        $latestPlanning = $this->historyService->latest('planning');
+        $planningConfig = $latestPlanning && is_array($latestPlanning->config ?? null)
+            ? $latestPlanning->config
+            : null;
 
         return view('verification.index', [
             'moyenneEncadrement' => $affectationData['moyenne'],
@@ -28,6 +35,7 @@ class VerificationController extends Controller
             'soutenancesCount' => $planningData['soutenances_count'],
             'encadrementMin' => VerificationService::ENCADREMENT_MIN,
             'encadrementMax' => VerificationService::ENCADREMENT_MAX,
+            'planningConfig' => $planningConfig,
         ]);
     }
 }
