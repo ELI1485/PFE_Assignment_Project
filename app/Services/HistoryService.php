@@ -31,6 +31,7 @@ class HistoryService
             'label' => $data['label'],
             'data' => $data['data'],
             'count' => $data['count'] ?? 0,
+            'config' => $data['config'] ?? null,
             'created_at' => now()->toDateTimeString(),
         ];
 
@@ -96,7 +97,8 @@ class HistoryService
     {
         // Add compatibility fields for views
         $snapshot['created_at'] = Carbon::parse($snapshot['created_at']);
-        
+        $snapshot['config'] = $snapshot['config'] ?? null;
+
         if ($type === 'affectation') {
             $snapshot['etudiants_count'] = $snapshot['count'];
         } else {

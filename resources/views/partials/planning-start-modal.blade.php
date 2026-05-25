@@ -122,6 +122,36 @@
                 </p>
             </section>
 
+            <section class="planning-modal-section">
+                <h6 class="planning-section-title">Dates à exclure (optionnel)</h6>
+
+                <p class="text-muted small mb-2">
+                    Jours fériés, journées portes ouvertes, etc. Ces dates ne seront pas utilisées pour les soutenances. Le calendrier sera prolongé pour conserver le nombre de jours demandé.
+                </p>
+
+                <div class="planning-exclude-card">
+                    <div class="d-flex flex-wrap gap-2 align-items-end">
+                        <div class="flex-grow-1" style="min-width: 180px;">
+                            <label for="exclude_date_input" class="form-label small text-muted mb-1">Ajouter une date</label>
+                            <input type="date" id="exclude_date_input" class="form-control"
+                                   min="{{ now()->toDateString() }}">
+                        </div>
+                        <button type="button" id="addExcludeDateBtn" class="btn btn-outline-primary">
+                            <i class="bi bi-plus-lg"></i> Ajouter
+                        </button>
+                    </div>
+
+                    <div id="excludeDatesList" class="planning-exclude-chips"
+                         data-old="{{ json_encode(old('dates_exclues', [])) }}">
+                        {{-- Chips are rendered by JS so old() and dynamic adds share one code path --}}
+                    </div>
+
+                    <p id="excludeDatesEmpty" class="text-muted small mb-0 mt-2" style="display: none;">
+                        Aucune date exclue.
+                    </p>
+                </div>
+            </section>
+
             <footer class="planning-modal-actions">
                 <button type="button" class="btn btn-outline-secondary" onclick="closePlanningModal()">Annuler</button>
                 <button type="submit" class="btn btn-success" id="planningSubmitBtn">
@@ -234,6 +264,45 @@
         font-size: 0.82rem;
     }
 
+    .planning-exclude-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        background: var(--surface-soft);
+    }
+
+    .planning-exclude-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+        min-height: 0;
+    }
+
+    .planning-exclude-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px 6px 12px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid #d4e2ff;
+        color: var(--heading);
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .planning-exclude-chip .chip-remove {
+        background: transparent;
+        border: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 2px;
+    }
+    .planning-exclude-chip .chip-remove:hover { color: #ef4444; }
+
     .planning-modal-actions {
         display: flex;
         justify-content: flex-end;
@@ -283,5 +352,79 @@
                 overlay.style.display = 'flex';
             });
         }
+
+        // ── Excluded-dates chip list ──────────────────────────────
+        const list = document.getElementById('excludeDatesList');
+        const empty = document.getElementById('excludeDatesEmpty');
+        const input = document.getElementById('exclude_date_input');
+        const addBtn = document.getElementById('addExcludeDateBtn');
+
+        if (!list || !input || !addBtn) {
+            return;
+        }
+
+        const selected = new Set();
+
+        function renderEmpty() {
+            if (empty) {
+                empty.style.display = selected.size === 0 ? '' : 'none';
+            }
+        }
+
+        function formatHuman(iso) {
+            // 2026-05-27 -> 27/05/2026
+            const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+        }
+
+        function addDate(iso) {
+            if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso) || selected.has(iso)) {
+                return;
+            }
+            selected.add(iso);
+
+            const chip = document.createElement('span');
+            chip.className = 'planning-exclude-chip';
+            chip.dataset.iso = iso;
+            chip.innerHTML =
+                `<input type="hidden" name="dates_exclues[]" value="${iso}">` +
+                `<i class="bi bi-calendar-event"></i>` +
+                `<span>${formatHuman(iso)}</span>` +
+                `<button type="button" class="chip-remove" aria-label="Retirer cette date">×</button>`;
+
+            chip.querySelector('.chip-remove').addEventListener('click', function () {
+                selected.delete(iso);
+                chip.remove();
+                renderEmpty();
+            });
+
+            list.appendChild(chip);
+            renderEmpty();
+        }
+
+        addBtn.addEventListener('click', function () {
+            addDate(input.value);
+            input.value = '';
+            input.focus();
+        });
+
+        // Pressing Enter inside the date input should add, not submit.
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addBtn.click();
+            }
+        });
+
+        // Re-hydrate from old() after a validation failure.
+        try {
+            const oldRaw = list.dataset.old || '[]';
+            const oldDates = JSON.parse(oldRaw);
+            if (Array.isArray(oldDates)) {
+                oldDates.forEach(addDate);
+            }
+        } catch (_) { /* ignore */ }
+
+        renderEmpty();
     });
 </script>

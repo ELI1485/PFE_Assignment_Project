@@ -33,10 +33,14 @@
 
 <div class="page-actions">
     <div class="section-subtitle">Analyse des anomalies et contraintes non satisfaites lors de la génération.</div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
         <a href="{{ route('planning.results') }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i>
             Retour au Planning
+        </a>
+        <a href="{{ route('verification.index') }}" class="btn btn-outline-primary">
+            <i class="bi bi-shield-check"></i>
+            Audit des Contraintes
         </a>
         <button type="button" class="btn btn-success" onclick="openPlanningModal()">
             <i class="bi bi-arrow-clockwise"></i>

@@ -171,13 +171,24 @@ class AssignmentController extends Controller
                 'aprem_actif'   => 'nullable|boolean',
                 'aprem_debut'   => 'nullable|date_format:H:i|required_if:aprem_actif,1',
                 'aprem_fin'     => 'nullable|date_format:H:i|required_if:aprem_actif,1|after:aprem_debut',
+                'dates_exclues'   => 'nullable|array',
+                'dates_exclues.*' => 'date_format:Y-m-d',
             ]);
 
-            $dateDebut  = $validated['date_debut'];
-            $nbJours    = (int) $validated['nb_jours'];
-            $duree      = (int) ($validated['creneau_duree'] ?? 60);
-            $nbJurys    = (int) ($validated['nb_jurys'] ?? 3);
-            $slotRanges = $this->buildSlotRanges($request, $duree);
+            $dateDebut    = $validated['date_debut'];
+            $nbJours      = (int) $validated['nb_jours'];
+            $duree        = (int) ($validated['creneau_duree'] ?? 60);
+            $nbJurys      = (int) ($validated['nb_jurys'] ?? 3);
+            $slotRanges   = $this->buildSlotRanges($request, $duree);
+            // Deduplicate, drop dates strictly before $dateDebut (they have no
+            // effect anyway), then sort for deterministic snapshots.
+            $excludedDates = collect($validated['dates_exclues'] ?? [])
+                ->filter()
+                ->unique()
+                ->filter(fn(string $d) => $d >= $dateDebut)
+                ->sort()
+                ->values()
+                ->all();
 
             if (empty($slotRanges)) {
                 return redirect()->route('conformite.index')
@@ -192,10 +203,10 @@ class AssignmentController extends Controller
             Jury::query()->delete();
             Creneau::query()->delete();
 
-            DB::transaction(function () use ($dateDebut, $nbJours, $slotRanges, $nbJurys) {
+            DB::transaction(function () use ($dateDebut, $nbJours, $slotRanges, $nbJurys, $excludedDates) {
                 // Encadrant assignment is done separately via the Affectation workflow.
                 // We trust the existing encadrant_id values on Projet rows.
-                $this->assignmentService->planifierCreneaux($dateDebut, $nbJours, $slotRanges);
+                $this->assignmentService->planifierCreneaux($dateDebut, $nbJours, $slotRanges, $excludedDates);
                 $this->assignmentService->runAssignment($nbJurys);
                 $this->assignmentService->buildJuries();
             });
@@ -351,6 +362,14 @@ class AssignmentController extends Controller
                 'label' => 'Planning du ' . now()->format('d/m/Y à H:i'),
                 'data' => $data,
                 'count' => $soutenances->count(),
+                'config' => [
+                    'date_debut'    => $dateDebut,
+                    'nb_jours'      => $nbJours,
+                    'creneau_duree' => $duree,
+                    'nb_jurys'      => $nbJurys,
+                    'slot_ranges'   => $slotRanges,
+                    'dates_exclues' => $excludedDates,
+                ],
             ]);
 
             Storage::delete('conformite_diagnostic.json');

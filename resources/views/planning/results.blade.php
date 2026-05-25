@@ -11,6 +11,60 @@
     .salle-mini-card { background: #f8fafc; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
     .filiere-badge { padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
     .planning-incomplete td:first-child { border-left: 3px solid #ef4444; }
+
+    .config-summary {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 18px;
+        box-shadow: var(--shadow-soft);
+    }
+    .config-summary-title {
+        color: var(--heading);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+    .config-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px 22px;
+    }
+    .config-summary-grid > div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 0.86rem;
+    }
+    .config-label {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .config-value {
+        color: var(--heading);
+        font-weight: 600;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .config-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--ensah-blue-soft);
+        color: var(--ensah-blue);
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+    .config-chip-warn {
+        background: #fef3c7;
+        color: #b45309;
+    }
 </style>
 @endpush
 
@@ -60,6 +114,46 @@
         </button>
     </div>
 </div>
+
+@php
+    $usedConfig = $snapshot && is_array($snapshot->config ?? null) ? $snapshot->config : null;
+@endphp
+@if ($usedConfig)
+    <div class="config-summary mb-4">
+        <div class="config-summary-title">
+            <i class="bi bi-sliders me-1"></i>
+            Configuration utilisée pour cette génération
+        </div>
+        <div class="config-summary-grid">
+            @if (!empty($usedConfig['date_debut']))
+                <div><span class="config-label">Début</span><span class="config-value">{{ \Illuminate\Support\Carbon::parse($usedConfig['date_debut'])->format('d/m/Y') }}</span></div>
+            @endif
+            @if (!empty($usedConfig['nb_jours']))
+                <div><span class="config-label">Jours</span><span class="config-value">{{ $usedConfig['nb_jours'] }}</span></div>
+            @endif
+            @if (!empty($usedConfig['creneau_duree']))
+                <div><span class="config-label">Durée créneau</span><span class="config-value">{{ $usedConfig['creneau_duree'] }} min</span></div>
+            @endif
+            @if (!empty($usedConfig['nb_jurys']))
+                <div><span class="config-label">Membres jury</span><span class="config-value">{{ $usedConfig['nb_jurys'] }}</span></div>
+            @endif
+            @if (!empty($usedConfig['slot_ranges']))
+                <div><span class="config-label">Plages</span><span class="config-value">
+                    @foreach ($usedConfig['slot_ranges'] as $start => $end)
+                        <span class="config-chip">{{ $start }}–{{ $end }}</span>
+                    @endforeach
+                </span></div>
+            @endif
+            @if (!empty($usedConfig['dates_exclues']))
+                <div><span class="config-label">Dates exclues</span><span class="config-value">
+                    @foreach ($usedConfig['dates_exclues'] as $iso)
+                        <span class="config-chip config-chip-warn">{{ \Illuminate\Support\Carbon::parse($iso)->format('d/m/Y') }}</span>
+                    @endforeach
+                </span></div>
+            @endif
+        </div>
+    </div>
+@endif
 
 <div class="row g-4 mb-4">
     <div class="col-lg-6">

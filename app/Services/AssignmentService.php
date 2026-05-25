@@ -77,12 +77,17 @@ class AssignmentService
      * Generate Creneau records dynamically based on the user-provided
      * start date, number of working days and slot ranges (HH:MM => HH:MM).
      *
-     * @param string                $dateDebut  Start date (YYYY-MM-DD)
-     * @param int                   $nbJours    Number of working days (weekends skipped)
-     * @param array<string,string>  $slotRanges Map of "HH:MM" start => "HH:MM" end
+     * @param string                $dateDebut      Start date (YYYY-MM-DD)
+     * @param int                   $nbJours        Number of working days (weekends + excluded dates skipped)
+     * @param array<string,string>  $slotRanges     Map of "HH:MM" start => "HH:MM" end
+     * @param array<int,string>     $excludedDates  YYYY-MM-DD dates to skip (e.g. national holidays)
      */
-    public function planifierCreneaux(string $dateDebut, int $nbJours = 4, array $slotRanges = []): void
-    {
+    public function planifierCreneaux(
+        string $dateDebut,
+        int $nbJours = 4,
+        array $slotRanges = [],
+        array $excludedDates = []
+    ): void {
         $this->ensureSallesExist();
 
         if (empty($slotRanges)) {
@@ -110,7 +115,7 @@ class AssignmentService
         $capacite = $this->maxSoutenancesPerSlot();
         $nbJours = max(1, $nbJours);
 
-        foreach ($this->workingDates($dateDebut, $nbJours) as $date) {
+        foreach ($this->workingDates($dateDebut, $nbJours, $excludedDates) as $date) {
             foreach ($slotRanges as $debut => $fin) {
                 Creneau::updateOrCreate(
                     [
@@ -645,15 +650,34 @@ class AssignmentService
             ->values();
     }
 
-    private function workingDates(string $dateDebut, int $days): array
+    /**
+     * Compute the list of working dates starting at $dateDebut, skipping
+     * weekends and any dates listed in $excludedDates. Iterates the
+     * calendar until $days valid dates are collected, with a safety cap
+     * to avoid infinite loops if the user passes an absurd exclusion set.
+     *
+     * @param array<int,string> $excludedDates YYYY-MM-DD strings to skip
+     * @return array<int,string>
+     */
+    private function workingDates(string $dateDebut, int $days, array $excludedDates = []): array
     {
+        $excluded = array_flip(array_filter(array_map(
+            fn($d) => is_string($d) ? trim($d) : null,
+            $excludedDates
+        )));
+
         $dates = [];
         $current = new \DateTimeImmutable($dateDebut);
+        $maxIterations = 365 * 2; // hard cap so we never loop forever
 
-        while (count($dates) < $days) {
+        for ($i = 0; count($dates) < $days && $i < $maxIterations; $i++) {
+            $iso = $current->format('Y-m-d');
             $dayOfWeek = (int) $current->format('N');
-            if ($dayOfWeek < 6) {
-                $dates[] = $current->format('Y-m-d');
+            $isWeekend = $dayOfWeek >= 6;
+            $isExcluded = isset($excluded[$iso]);
+
+            if (!$isWeekend && !$isExcluded) {
+                $dates[] = $iso;
             }
 
             $current = $current->modify('+1 day');
