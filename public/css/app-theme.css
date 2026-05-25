@@ -492,3 +492,28 @@ table tbody tr:hover {
         padding: 18px;
     }
 }
+
+/* ── Modal action button spacing ──────────────────────────────────── */
+.app-modal-box .d-flex.justify-content-end,
+.app-modal-box .modal-actions,
+.modal-box .modal-actions,
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.app-modal-box .btn,
+.modal-box .btn,
+.modal-actions .btn {
+    min-width: 110px;
+    padding: 10px 20px;
+    white-space: nowrap;
+}
+
+.modal-actions form {
+    display: inline-flex;
+    margin: 0;
+}

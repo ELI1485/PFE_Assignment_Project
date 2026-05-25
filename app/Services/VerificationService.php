@@ -364,6 +364,6 @@ class VerificationService
 
     private function isInfoProfessor(Enseignant $professor): bool
     {
-        return str_contains(strtolower($professor->specialite ?? ''), 'info');
+        return str_contains(strtolower($professor->discipline ?? ''), 'info');
     }
 }

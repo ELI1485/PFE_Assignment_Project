@@ -126,7 +126,7 @@ class AssignmentService
         }
     }
 
-    public function runAssignment(): void
+    public function runAssignment(int $nbJurys = 3): void
     {
         $this->ensureSallesExist();
 
@@ -162,7 +162,8 @@ class AssignmentService
                 $salles,
                 $allProfessors,
                 $state,
-                $slotOrder
+                $slotOrder,
+                $nbJurys
             );
 
             if (!$package) {
@@ -296,7 +297,8 @@ class AssignmentService
         Collection $salles,
         Collection $allProfessors,
         array $state,
-        array $slotOrder
+        array $slotOrder,
+        int $nbJurys = 3
     ): ?array {
         $encadrant = $projet->encadrant;
         if (!$encadrant) {
@@ -347,12 +349,14 @@ class AssignmentService
                 ))
                 ->values();
 
-            if ($available->count() < 2) {
+            $nbRapporteurs = max(1, $nbJurys - 1);
+
+            if ($available->count() < $nbRapporteurs) {
                 continue;
             }
 
-            $rapporteurs = $this->pickBestJury($encadrant, $available, $state['profJuryCount']);
-            if (!$rapporteurs) {
+            $rapporteurs = $this->pickBestJury($encadrant, $available, $state['profJuryCount'], $nbRapporteurs);
+            if ($rapporteurs === null) {
                 continue;
             }
 
@@ -368,8 +372,19 @@ class AssignmentService
         return $best;
     }
 
-    private function pickBestJury(Enseignant $encadrant, Collection $available, array $juryCount): ?array
+    /**
+     * Pick the best set of $nbRapporteurs professors for the jury,
+     * ensuring at least 2 informatique professors across the full jury
+     * (encadrant + picked members).
+     *
+     * @return Enseignant[]|null
+     */
+    private function pickBestJury(Enseignant $encadrant, Collection $available, array $juryCount, int $nbRapporteurs = 2): ?array
     {
+        if ($nbRapporteurs <= 0) {
+            return [];
+        }
+
         $sorted = $available
             ->sort(function (Enseignant $a, Enseignant $b) use ($juryCount) {
                 return [
@@ -384,26 +399,73 @@ class AssignmentService
                     $b->id,
                 ];
             })
-            ->values();
+            ->values()
+            ->all();
 
-        $encadrantIsInfo = $this->isInfoProfessor($encadrant);
-        $count = $sorted->count();
-
-        for ($i = 0; $i < $count; $i++) {
-            for ($j = $i + 1; $j < $count; $j++) {
-                $first = $sorted[$i];
-                $second = $sorted[$j];
-                $infoCount = ($encadrantIsInfo ? 1 : 0)
-                    + ($this->isInfoProfessor($first) ? 1 : 0)
-                    + ($this->isInfoProfessor($second) ? 1 : 0);
-
-                if ($infoCount >= 2) {
-                    return [$first, $second];
-                }
+        // Separate professors into "info" and "other" categories, keeping sorted order
+        $infoProfs = [];
+        $otherProfs = [];
+        
+        foreach ($sorted as $index => $prof) {
+            if ($this->isInfoProfessor($prof)) {
+                $infoProfs[] = ['prof' => $prof, 'index' => $index];
+            } else {
+                $otherProfs[] = ['prof' => $prof, 'index' => $index];
             }
         }
 
+        $encadrantIsInfo = $this->isInfoProfessor($encadrant);
+        // We need at least 2 info professors total (including encadrant)
+        $minInfoNeeded = $encadrantIsInfo ? 1 : 2;
+        $minInfoNeeded = max(0, $minInfoNeeded);
+
+        $bestTuple = null;
+
+        // Try picking $c info professors and ($nbRapporteurs - $c) other professors.
+        // Since both groups are already sorted by load, picking the first items from each group 
+        // guarantees the lexicographically smallest combination for that specific split.
+        for ($c = $minInfoNeeded; $c <= $nbRapporteurs; $c++) {
+            $otherNeeded = $nbRapporteurs - $c;
+
+            if ($c > count($infoProfs) || $otherNeeded > count($otherProfs)) {
+                continue; // Not enough professors in this category
+            }
+
+            $comboIndices = [];
+            
+            for ($i = 0; $i < $c; $i++) {
+                $comboIndices[] = $infoProfs[$i]['index'];
+            }
+            for ($i = 0; $i < $otherNeeded; $i++) {
+                $comboIndices[] = $otherProfs[$i]['index'];
+            }
+
+            sort($comboIndices);
+
+            if ($bestTuple === null || $this->isLexicographicallySmaller($comboIndices, $bestTuple)) {
+                $bestTuple = $comboIndices;
+            }
+        }
+
+        if ($bestTuple !== null) {
+            return array_map(fn($idx) => $sorted[$idx], $bestTuple);
+        }
+
         return null;
+    }
+
+    private function isLexicographicallySmaller(array $a, array $b): bool
+    {
+        $count = min(count($a), count($b));
+        for ($i = 0; $i < $count; $i++) {
+            if ($a[$i] < $b[$i]) {
+                return true;
+            }
+            if ($a[$i] > $b[$i]) {
+                return false;
+            }
+        }
+        return count($a) < count($b);
     }
 
     private function persistPackage(Projet $projet, array $package): void

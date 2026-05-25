@@ -226,7 +226,7 @@
         <div class="page-actions">
             <div>
                 <div class="section-subtitle">
-                    Téléchargez le modèle Excel unifié, remplissez ses deux feuilles (étudiants et professeurs), puis importez-le ici.
+                    Téléchargez le modèle Excel, remplissez ses 4 feuilles (Étudiants GI, ID, TDIA et Professeurs), puis importez-le ici.
                 </div>
             </div>
             <div class="template-actions">
@@ -251,12 +251,14 @@
         <div class="card import-card">
             <div class="import-card-head">
                 <h2>Importer le fichier Excel unifié</h2>
-                <p>Un seul fichier Excel contenant les deux feuilles attendues : Étudiants et Professeurs.</p>
+                <p>Un seul fichier Excel contenant les 4 feuilles attendues : Étudiants GI, Étudiants ID, Étudiants TDIA et Professeurs.</p>
             </div>
             <div class="import-card-body">
                 <div class="sheet-legend">
-                    <span class="sheet-pill"><i class="bi bi-1-circle"></i> Feuille 1 — Étudiants</span>
-                    <span class="sheet-pill"><i class="bi bi-2-circle"></i> Feuille 2 — Professeurs</span>
+                    <span class="sheet-pill"><i class="bi bi-1-circle"></i> Feuille 1 — Étudiants GI</span>
+                    <span class="sheet-pill"><i class="bi bi-2-circle"></i> Feuille 2 — Étudiants ID</span>
+                    <span class="sheet-pill"><i class="bi bi-3-circle"></i> Feuille 3 — Étudiants TDIA</span>
+                    <span class="sheet-pill"><i class="bi bi-4-circle"></i> Feuille 4 — Professeurs</span>
                 </div>
                 <div class="hint-tag">
                     Les données existantes (étudiants, projets, jurys, plannings et enseignants) seront remplacées par le contenu du fichier importé.
@@ -269,8 +271,8 @@
 
                     <div class="drop-zone" id="dropUnified" onclick="document.getElementById('fileUnified').click()">
                         <div class="drop-symbol"><i class="bi bi-file-earmark-excel"></i></div>
-                        <p class="drop-title">Déposer le fichier Excel unifié</p>
-                        <p class="drop-sub">Formats acceptés : .xls, .xlsx — un seul fichier avec deux feuilles.</p>
+                        <p class="drop-title">Déposer votre fichier Excel contenant 4 feuilles</p>
+                        <p class="drop-sub">Formats acceptés : .xls, .xlsx — Un seul fichier avec les feuilles GI, ID, TDIA et Professeurs.</p>
                         <button type="button" class="btn btn-primary"
                             onclick="event.stopPropagation(); document.getElementById('fileUnified').click()">
                             Parcourir
@@ -345,7 +347,7 @@
         function showFiles(target, files) {
             if (!files.length) return;
             target.style.display = 'block';
-            target.innerHTML = Array.from(files).map(file => `<div>${file.name}</div>`).join('');
+            target.innerHTML = `<div>${files[0].name}</div>`;
         }
 
         fileUnified.addEventListener('change', () => showFiles(chosenUnified, fileUnified.files));

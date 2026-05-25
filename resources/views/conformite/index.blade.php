@@ -21,13 +21,38 @@
 
 @section('content')
 
+@include('partials.planning-start-modal')
+
+@if(session('error'))
+    <div class="alert alert-danger mb-4">{!! session('error') !!}</div>
+@endif
+
+@if(session('success'))
+    <div class="alert alert-success mb-4">{!! session('success') !!}</div>
+@endif
+
 <div class="page-actions">
     <div class="section-subtitle">Analyse des anomalies et contraintes non satisfaites lors de la génération.</div>
-    <a href="{{ route('planning.results') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i>
-        Retour au Planning
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ route('planning.results') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i>
+            Retour au Planning
+        </a>
+        <button type="button" class="btn btn-success" onclick="openPlanningModal()">
+            <i class="bi bi-arrow-clockwise"></i>
+            Relancer l'Algorithme
+        </button>
+    </div>
 </div>
+
+@if(session('planning_recommendation'))
+    <div class="anomaly-card info mb-4" style="border-left-color: #3b82f6;">
+        <div class="anomaly-title" style="color: #1e40af;">
+            <i class="bi bi-lightbulb-fill me-1"></i> Recommandation du planificateur
+        </div>
+        <div class="anomaly-desc" style="white-space: pre-line;">{{ session('planning_recommendation') }}</div>
+    </div>
+@endif
 
 @if($diagnostic === null)
     <div class="anomaly-card info">

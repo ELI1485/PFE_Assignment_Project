@@ -154,8 +154,20 @@ class WordExportService
         $boldCenter = ['bold' => true, 'size' => 8, 'color' => 'FFFFFF'];
         $centerPara = ['alignment' => 'center'];
 
-        $headers = ['ID', 'Encadrant', 'Membre de jury 1', 'Membre de jury 2', 'Date', 'Heure', 'Salle', 'Nom', 'Prénom', 'Filière'];
-        $widths = [700, 3300, 3300, 3300, 1800, 1600, 1400, 2500, 2500, 1600];
+        // Determine the max number of jury members (examinateurs) across all rows
+        $maxJuryMembers = $rows->max(fn($row) => count($row['examinateurs'] ?? []));
+        $maxJuryMembers = max(2, $maxJuryMembers); // At least 2 columns
+
+        // Build dynamic headers and widths
+        $headers = ['ID', 'Encadrant'];
+        $widths = [700, 3300];
+        $juryColWidth = (int) floor(6600 / $maxJuryMembers); // Split the ~6600 space among jury members
+        for ($j = 1; $j <= $maxJuryMembers; $j++) {
+            $headers[] = "Membre de jury {$j}";
+            $widths[] = $juryColWidth;
+        }
+        $headers = array_merge($headers, ['Date', 'Heure', 'Salle', 'Nom', 'Prénom', 'Filière']);
+        $widths = array_merge($widths, [1800, 1600, 1400, 2500, 2500, 1600]);
 
         $table->addRow();
         foreach ($headers as $index => $header) {
@@ -171,11 +183,7 @@ class WordExportService
             $encadrant = $row['encadrant'] ?? '';
             $encColor = PdfExportService::getProfessorColor($encadrant);
 
-            $jury1 = $row['examinateurs'][0] ?? '';
-            $j1Color = PdfExportService::getProfessorColor($jury1);
-
-            $jury2 = $row['examinateurs'][1] ?? '';
-            $j2Color = PdfExportService::getProfessorColor($jury2);
+            $examinateurs = $row['examinateurs'] ?? [];
 
             $table->addRow();
 
@@ -183,23 +191,28 @@ class WordExportService
 
             $table->addCell($widths[1], ['bgColor' => ltrim($encColor, '#')])->addText($this->cleanProfessorPrefix($encadrant), ['bold' => true, 'size' => 8]);
 
-            $table->addCell($widths[2], ['bgColor' => ltrim($j1Color, '#')])->addText($this->cleanProfessorPrefix($jury1), ['bold' => true, 'size' => 8]);
+            // Dynamic jury member columns
+            for ($j = 0; $j < $maxJuryMembers; $j++) {
+                $juryMember = $examinateurs[$j] ?? '';
+                $jColor = PdfExportService::getProfessorColor($juryMember);
+                $colIdx = 2 + $j;
+                $table->addCell($widths[$colIdx], ['bgColor' => ltrim($jColor, '#')])->addText($this->cleanProfessorPrefix($juryMember), ['bold' => true, 'size' => 8]);
+            }
 
-            $table->addCell($widths[3], ['bgColor' => ltrim($j2Color, '#')])->addText($this->cleanProfessorPrefix($jury2), ['bold' => true, 'size' => 8]);
+            $baseColIdx = 2 + $maxJuryMembers;
+            $table->addCell($widths[$baseColIdx], ['bgColor' => 'FFFF00'])->addText($row['date'] ?? '', ['bold' => true, 'size' => 8], $centerPara);
 
-            $table->addCell($widths[4], ['bgColor' => 'FFFF00'])->addText($row['date'] ?? '', ['bold' => true, 'size' => 8], $centerPara);
+            $table->addCell($widths[$baseColIdx + 1], ['bgColor' => $bgBase])->addText($row['heure_debut'] ?? '', ['size' => 8], $centerPara);
 
-            $table->addCell($widths[5], ['bgColor' => $bgBase])->addText($row['heure_debut'] ?? '', ['size' => 8], $centerPara);
+            $table->addCell($widths[$baseColIdx + 2], ['bgColor' => $bgBase])->addText($row['salle'] ?? '', ['bold' => true, 'size' => 8], $centerPara);
 
-            $table->addCell($widths[6], ['bgColor' => $bgBase])->addText($row['salle'] ?? '', ['bold' => true, 'size' => 8], $centerPara);
-
-            $nomCell = $table->addCell($widths[7], ['bgColor' => ltrim($filiereColor, '#')]);
+            $nomCell = $table->addCell($widths[$baseColIdx + 3], ['bgColor' => ltrim($filiereColor, '#')]);
             $nomCell->addText(strtoupper($row['etudiant_nom'] ?? ''), ['size' => 8]);
             if (! empty($row['etudiant2_nom'])) {
                 $nomCell->addText(strtoupper($row['etudiant2_nom']), ['size' => 8]);
             }
 
-            $prenomCell = $table->addCell($widths[8], ['bgColor' => ltrim($filiereColor, '#')]);
+            $prenomCell = $table->addCell($widths[$baseColIdx + 4], ['bgColor' => ltrim($filiereColor, '#')]);
             $prenomCell->addText($row['etudiant_prenom'] ?? '', ['size' => 8]);
             if (! empty($row['etudiant2_prenom'])) {
                 $prenomCell->addText($row['etudiant2_prenom'], ['size' => 8]);
@@ -216,7 +229,7 @@ class WordExportService
                 $fText = $row['filiere'] ?? '';
             }
 
-            $table->addCell($widths[9], ['bgColor' => ltrim($filiereColor, '#')])->addText($fText, ['bold' => true, 'size' => 8], $centerPara);
+            $table->addCell($widths[$baseColIdx + 5], ['bgColor' => ltrim($filiereColor, '#')])->addText($fText, ['bold' => true, 'size' => 8], $centerPara);
         }
     }
 

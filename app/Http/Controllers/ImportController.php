@@ -44,9 +44,11 @@ class ImportController extends Controller
     }
 
     /**
-     * Unified import: a single Excel file containing two sheets
-     *  - Sheet 1: students
-     *  - Sheet 2: professors
+     * Unified import: a single Excel file containing exactly 4 sheets:
+     *  - Sheet 1: Students GI
+     *  - Sheet 2: Students ID
+     *  - Sheet 3: Students TDIA
+     *  - Sheet 4: Professors
      */
     public function importUnified(Request $request)
     {
@@ -108,7 +110,8 @@ class ImportController extends Controller
     }
 
     /**
-     * Build a fresh excel_template.xlsx with two sheets: Étudiants + Professeurs.
+     * Build a fresh excel_template.xlsx with 4 sheets:
+     * Étudiants GI, Étudiants ID, Étudiants TDIA, and Professeurs.
      */
     private function generateUnifiedTemplate(string $path): void
     {
@@ -119,14 +122,21 @@ class ImportController extends Controller
 
         $spreadsheet = new Spreadsheet();
 
-        // Sheet 1 — Étudiants
-        $studentSheet = $spreadsheet->getActiveSheet();
-        $studentSheet->setTitle('Etudiants');
         $studentHeaders = ['CNE', 'Nom', 'Prenom', 'Filiere', 'CNE Binome', 'Nom Binome', 'Prenom Binome', 'Sujet', 'Langue'];
-        $studentSheet->fromArray($studentHeaders, null, 'A1');
-        $this->styleHeaderRow($studentSheet, count($studentHeaders), 1);
+        $sheetNames = ['Etudiants GI', 'Etudiants ID', 'Etudiants TDIA'];
 
-        // Sheet 2 — Professeurs (header on row 2 to match the historical layout)
+        foreach ($sheetNames as $index => $sheetName) {
+            if ($index === 0) {
+                $sheet = $spreadsheet->getActiveSheet();
+            } else {
+                $sheet = $spreadsheet->createSheet();
+            }
+            $sheet->setTitle($sheetName);
+            $sheet->fromArray($studentHeaders, null, 'A1');
+            $this->styleHeaderRow($sheet, count($studentHeaders), 1);
+        }
+
+        // Sheet 4 — Professeurs (header on row 2 to match the historical layout)
         $profSheet = $spreadsheet->createSheet();
         $profSheet->setTitle('Professeurs');
         $profSheet->setCellValue('A1', 'Liste des Enseignants');
@@ -134,7 +144,7 @@ class ImportController extends Controller
         $profSheet->getStyle('A1')->getFont()->setBold(true);
         $profSheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $profHeaders = ['Nom', 'Prenom', 'Specialite'];
+        $profHeaders = ['Nom', 'Prenom', 'Discipline'];
         $profSheet->fromArray($profHeaders, null, 'A2');
         $this->styleHeaderRow($profSheet, count($profHeaders), 2);
 

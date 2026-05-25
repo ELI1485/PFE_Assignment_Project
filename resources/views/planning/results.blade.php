@@ -134,7 +134,7 @@
                             $fClass = 'f-gi';
                         }
                         $nbRapporteurs = count($row['examinateurs'] ?? []);
-                        $juryOk = $nbRapporteurs >= 2 && !empty($row['president']) && $row['president'] !== 'N/A';
+                        $juryOk = $nbRapporteurs >= 1 && !empty($row['president']) && $row['president'] !== 'N/A';
                     @endphp
                     <tr class="{{ !$juryOk ? 'planning-incomplete table-warning' : '' }}">
                         <td class="fw-semibold text-muted">#P{{ str_pad($index + 1, 2, '0', STR_PAD_LEFT) }}</td>

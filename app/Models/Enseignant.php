@@ -13,7 +13,7 @@ class Enseignant extends Model
     protected $fillable = [
         'nom',
         'prenom',
-        'specialite',        
+        'discipline',        
     ];
 
     public function projets()

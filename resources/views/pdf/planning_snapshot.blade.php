@@ -35,13 +35,20 @@
         <div class="annee">Année Universitaire {{ $anneeUniversitaire ?? (date('n') < 9 ? (date('Y') - 1) . '/' . date('Y') : date('Y') . '/' . (date('Y') + 1)) }}</div>
     </div>
 
+    @php
+        // Determine the max number of jury members (examinateurs) across all rows
+        $maxJuryMembers = $rows->max(fn($row) => count($row['examinateurs'] ?? []));
+        $maxJuryMembers = max(2, $maxJuryMembers); // At least 2 columns
+    @endphp
+
     <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Encadrant</th>
-                <th>Membre de jury 1</th>
-                <th>Membre de jury 2</th>
+                @for($j = 1; $j <= $maxJuryMembers; $j++)
+                    <th>Membre de jury {{ $j }}</th>
+                @endfor
                 <th>Date</th>
                 <th>Heure</th>
                 <th>Salle</th>
@@ -59,12 +66,8 @@
                 
                 $encadrant = $row['encadrant'] ?? '';
                 $encColor = \App\Services\PdfExportService::getProfessorColor($encadrant);
-                
-                $jury1 = $row['examinateurs'][0] ?? '';
-                $j1Color = \App\Services\PdfExportService::getProfessorColor($jury1);
-                
-                $jury2 = $row['examinateurs'][1] ?? '';
-                $j2Color = \App\Services\PdfExportService::getProfessorColor($jury2);
+
+                $examinateurs = $row['examinateurs'] ?? [];
 
                 $bgBase = ($i % 2 === 0) ? '#ffffff' : '#DDEBF7';
                 
@@ -80,8 +83,13 @@
             <tr>
                 <td rowspan="{{ $rowspan }}" style="background-color: {{ $encColor }}; text-align: center; font-weight:bold;">{{ $i+1 }}</td>
                 <td rowspan="{{ $rowspan }}" style="background-color: {{ $encColor }}; font-weight: bold;">{{ preg_replace('/^(?:D|P)r\.\s*/i', '', $encadrant) }}</td>
-                <td rowspan="{{ $rowspan }}" style="background-color: {{ $j1Color }}; font-weight: bold;">{{ preg_replace('/^(?:D|P)r\.\s*/i', '', $jury1) }}</td>
-                <td rowspan="{{ $rowspan }}" style="background-color: {{ $j2Color }}; font-weight: bold;">{{ preg_replace('/^(?:D|P)r\.\s*/i', '', $jury2) }}</td>
+                @for($j = 0; $j < $maxJuryMembers; $j++)
+                    @php
+                        $juryMember = $examinateurs[$j] ?? '';
+                        $jColor = \App\Services\PdfExportService::getProfessorColor($juryMember);
+                    @endphp
+                    <td rowspan="{{ $rowspan }}" style="background-color: {{ $jColor }}; font-weight: bold;">{{ preg_replace('/^(?:D|P)r\.\s*/i', '', $juryMember) }}</td>
+                @endfor
                 <td rowspan="{{ $rowspan }}" class="date-cell">{{ $row['date'] ?? '' }}</td>
                 <td rowspan="{{ $rowspan }}" style="background-color: {{ $bgBase }};">{{ $row['heure_debut'] ?? '' }}</td>
                 <td rowspan="{{ $rowspan }}" style="background-color: {{ $bgBase }}; font-weight: bold;">{{ $row['salle'] ?? '' }}</td>

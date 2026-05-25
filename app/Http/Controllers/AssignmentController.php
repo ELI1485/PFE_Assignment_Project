@@ -33,9 +33,10 @@ class AssignmentController extends Controller
     {
         $latestPlanning = $this->historyService->latest('planning');
 
-        // Invalidate the snapshot if the DB was wiped (no students or no professors).
+        // Invalidate the snapshot if the DB was wiped or no active planning exists.
         $dbIsEmpty = Etudiant::count() === 0 || Enseignant::count() === 0;
-        if ($dbIsEmpty) {
+        $noActivePlanning = Soutenance::count() === 0;
+        if ($dbIsEmpty || $noActivePlanning) {
             $latestPlanning = null;
         }
 
@@ -145,10 +146,13 @@ class AssignmentController extends Controller
     public function runAlgorithm(Request $request)
     {
         try {
+            set_time_limit(300); // Allow up to 5 minutes for planning generation
+
             $validated = $request->validate([
                 'date_debut'    => 'required|date',
                 'nb_jours'      => 'required|integer|min:1|max:30',
                 'creneau_duree' => 'nullable|integer|in:30,45,60,90,120',
+                'nb_jurys'      => 'nullable|integer|min:2|max:6',
                 'matin_actif'   => 'nullable|boolean',
                 'matin_debut'   => 'nullable|date_format:H:i|required_if:matin_actif,1',
                 'matin_fin'     => 'nullable|date_format:H:i|required_if:matin_actif,1|after:matin_debut',
@@ -160,27 +164,142 @@ class AssignmentController extends Controller
             $dateDebut  = $validated['date_debut'];
             $nbJours    = (int) $validated['nb_jours'];
             $duree      = (int) ($validated['creneau_duree'] ?? 60);
+            $nbJurys    = (int) ($validated['nb_jurys'] ?? 3);
             $slotRanges = $this->buildSlotRanges($request, $duree);
 
             if (empty($slotRanges)) {
-                return redirect()->route('affectation.index')
+                return redirect()->route('conformite.index')
                     ->with('error', 'Veuillez activer au moins une plage horaire (matinée ou après-midi) avec des heures valides.');
             }
 
-            DB::transaction(function () use ($dateDebut, $nbJours, $slotRanges) {
-                DB::table('jury_enseignant')->delete();
-                Soutenance::query()->delete();
-                Jury::query()->delete();
-                Creneau::query()->delete();
+            // ── Wipe previous planning state BEFORE the transaction ──
+            // This ensures the old planning is permanently gone regardless
+            // of whether the new generation succeeds or fails.
+            DB::table('jury_enseignant')->delete();
+            Soutenance::query()->delete();
+            Jury::query()->delete();
+            Creneau::query()->delete();
 
+            DB::transaction(function () use ($dateDebut, $nbJours, $slotRanges, $nbJurys) {
                 // Encadrant assignment is done separately via the Affectation workflow.
                 // We trust the existing encadrant_id values on Projet rows.
                 $this->assignmentService->planifierCreneaux($dateDebut, $nbJours, $slotRanges);
-                $this->assignmentService->runAssignment();
+                $this->assignmentService->runAssignment($nbJurys);
                 $this->assignmentService->buildJuries();
             });
 
-            // Construire le snapshot
+            // ── Compute completion percentage ──
+            $totalEtudiants = Etudiant::count();
+            $scheduledIds = $this->scheduledStudentIds();
+            $affectes = count($scheduledIds);
+            $nonAffectes = max(0, $totalEtudiants - $affectes);
+            $pct = $totalEtudiants > 0 ? round(($affectes / $totalEtudiants) * 100) : 0;
+            $totalProjects = $this->canonicalProjects()->count();
+            $scheduledProjects = Soutenance::distinct('projet_id')->count('projet_id');
+
+            // ── If NOT 100 %: build diagnostic, redirect to conformité ──
+            if ($pct < 100) {
+                $nbDates = Creneau::get()
+                    ->groupBy(fn($c) => $c->date->format('Y-m-d'))
+                    ->count();
+
+                $nbSalles = Salle::count();
+                $nbCreneauxParJour = Creneau::select('heure_debut')
+                    ->distinct()
+                    ->count();
+                $capaciteMax =
+                    $nbDates *
+                    $nbCreneauxParJour *
+                    app(AssignmentService::class)
+                    ->maxSoutenancesPerSlot();
+
+                $etudiantsNonAffectes = Etudiant::whereNotIn('id', $scheduledIds)->get();
+
+                // ── Build actionable recommendations ──
+                $recommendations = [];
+                $projetsRestants = max(0, $totalProjects - $scheduledProjects);
+
+                if ($nbSalles < 5) {
+                    $sallesManquantes = max(1, 5 - $nbSalles);
+                    $recommendations[] = "Ajoutez au moins {$sallesManquantes} salle(s) supplémentaire(s) (vous en avez {$nbSalles}, recommandé : 5).";
+                }
+
+                $recommendedDays = $this->recommendDays(
+                    $totalProjects,
+                    $scheduledProjects,
+                    $nbJours,
+                    $nbCreneauxParJour ?: count($slotRanges),
+                    max(1, $nbSalles)
+                );
+
+                if ($recommendedDays > $nbJours) {
+                    $joursSupp = $recommendedDays - $nbJours;
+                    $recommendations[] = "Augmentez le nombre de jours de {$nbJours} à {$recommendedDays} (+{$joursSupp} jour(s)).";
+                }
+
+                if ($capaciteMax > 0 && $totalProjects > $capaciteMax) {
+                    $recommendations[] = "La capacité maximale théorique ({$capaciteMax} soutenances) est inférieure au nombre de projets ({$totalProjects}). Ajoutez des jours ou des salles.";
+                }
+
+                if (empty($recommendations)) {
+                    $recommendations[] = "Les contraintes de repos enseignant et de disponibilité jury limitent le placement. Essayez d'ajouter 1-2 jour(s) supplémentaire(s).";
+                }
+
+                $recommendation = sprintf(
+                    "Seulement %d%% des étudiants ont été placés (%d/%d) avec la configuration actuelle (%d jours, %d créneaux/jour, %d salle(s)).\n\nActions recommandées pour atteindre 100%% :\n• %s",
+                    $pct,
+                    $affectes,
+                    $totalEtudiants,
+                    $nbJours,
+                    $nbCreneauxParJour ?: count($slotRanges),
+                    max(1, $nbSalles),
+                    implode("\n• ", $recommendations)
+                );
+
+                $diagnostic = [
+                    'pct' => $pct,
+                    'total' => $totalEtudiants,
+                    'affectes' => $affectes,
+                    'non_affectes' => $nonAffectes,
+                    'total_projets' => $totalProjects,
+                    'projets_planifies' => $scheduledProjects,
+                    'projets_non_planifies' => $projetsRestants,
+                    'nb_salles' => $nbSalles,
+                    'salles_recommandees' => 5,
+                    'salles_manquantes' => max(0, 5 - $nbSalles),
+                    'nb_dates' => $nbDates,
+                    'capacite_max' => $capaciteMax,
+                    'manque_capacite' => max(0, $totalProjects - $capaciteMax),
+                    'etudiants_manquants' => $etudiantsNonAffectes->map(function ($e) {
+                        $projet = $this->projectForStudent($e);
+
+                        return [
+                            'nom' => $e->nom,
+                            'prenom' => $e->prenom,
+                            'filiere' => $e->filiere,
+                            'encadrant' => $projet?->encadrant
+                                ? ($projet->encadrant->nom . ' ' . $projet->encadrant->prenom)
+                                : 'Non assigné',
+                        ];
+                    })->toArray(),
+                ];
+
+                session(['conformite_diagnostic' => $diagnostic]);
+                Storage::put('conformite_diagnostic.json', json_encode($diagnostic));
+                session()->flash('planning_recommendation', $recommendation);
+
+                // Do NOT save to history — only 100% plannings are saved.
+                return redirect()->route('conformite.index')
+                    ->with('error', sprintf(
+                        '⚠️ Le planning n\'a pas pu atteindre 100%% de complétion (seulement %d%% — %d/%d étudiants planifiés). '
+                        . 'Aucun planning n\'a été sauvegardé. Veuillez ajuster vos contraintes et relancer.',
+                        $pct,
+                        $affectes,
+                        $totalEtudiants
+                    ));
+            }
+
+            // ── 100 % success: build snapshot and save to history ──
             $soutenances = Soutenance::with([
                 'projet.etudiant',
                 'projet.etudiant2',
@@ -221,103 +340,19 @@ class AssignmentController extends Controller
                 ['heure_debut', 'asc'],
             ])->values()->toArray();
 
-            $totalEtudiants = Etudiant::count();
-            $scheduledIds = $this->scheduledStudentIds();
-            $affectes = count($scheduledIds);
-            $nonAffectes = max(0, $totalEtudiants - $affectes);
-            $pct = $totalEtudiants > 0 ? round(($affectes / $totalEtudiants) * 100) : 0;
-            $totalProjects = $this->canonicalProjects()->count();
-            $scheduledProjects = Soutenance::distinct('projet_id')->count('projet_id');
-
             $this->historyService->save('planning', [
                 'label' => 'Planning du ' . now()->format('d/m/Y à H:i'),
                 'data' => $data,
                 'count' => $soutenances->count(),
             ]);
 
-            if ($pct < 100) {
-                $nbDates = Creneau::get()
-                    ->groupBy(fn($c) => $c->date->format('Y-m-d'))
-                    ->count();
-
-                $nbSalles = Salle::count();
-                $nbCreneauxParJour = Creneau::select('heure_debut')
-                    ->distinct()
-                    ->count();
-                $capaciteMax =
-                    $nbDates *
-                    $nbCreneauxParJour *
-                    app(AssignmentService::class)
-                    ->maxSoutenancesPerSlot();
-
-                $etudiantsNonAffectes = Etudiant::whereNotIn('id', $scheduledIds)->get();
-
-                $diagnostic = [
-                    'pct' => $pct,
-                    'total' => $totalEtudiants,
-                    'affectes' => $affectes,
-                    'non_affectes' => $nonAffectes,
-                    'total_projets' => $totalProjects,
-                    'projets_planifies' => $scheduledProjects,
-                    'projets_non_planifies' => max(0, $totalProjects - $scheduledProjects),
-                    'nb_salles' => $nbSalles,
-                    'salles_recommandees' => 5,
-                    'salles_manquantes' => max(0, 5 - $nbSalles),
-                    'nb_dates' => $nbDates,
-                    'capacite_max' => $capaciteMax,
-                    'manque_capacite' => max(0, $totalProjects - $capaciteMax),
-                    'etudiants_manquants' => $etudiantsNonAffectes->map(function ($e) {
-                        $projet = $this->projectForStudent($e);
-
-                        return [
-                            'nom' => $e->nom,
-                            'prenom' => $e->prenom,
-                            'filiere' => $e->filiere,
-                            'encadrant' => $projet?->encadrant
-                                ? ($projet->encadrant->nom . ' ' . $projet->encadrant->prenom)
-                                : 'Non assigné',
-                        ];
-                    })->toArray(),
-                ];
-
-                session(['conformite_diagnostic' => $diagnostic]);
-                Storage::put('conformite_diagnostic.json', json_encode($diagnostic));
-
-                // Build a recommendation based on the actually-observed scheduling
-                // throughput. Falls back to a theoretical capacity estimate if no
-                // project at all could be scheduled.
-                $recommendedDays = $this->recommendDays(
-                    $totalProjects,
-                    $scheduledProjects,
-                    $nbJours,
-                    $nbCreneauxParJour ?: count($slotRanges),
-                    max(1, $nbSalles)
-                );
-
-                $recommendation = sprintf(
-                    "Avec %d projet(s) à planifier et la configuration actuelle (%d jours, %d créneaux/jour, %d salle(s)), seuls %d%% des étudiants ont pu être placés. " .
-                        "D'après la cadence observée, il est recommandé d'allouer environ %d jour(s) pour respecter pleinement toutes les contraintes.",
-                    $totalProjects,
-                    $nbJours,
-                    $nbCreneauxParJour ?: count($slotRanges),
-                    max(1, $nbSalles),
-                    $pct,
-                    $recommendedDays
-                );
-
-                session()->flash('planning_recommendation', $recommendation);
-
-                return redirect()->route('planning.results')
-                    ->with('warning', "⚠️ Seulement {$pct}% des étudiants ont pu être planifiés ({$affectes}/{$totalEtudiants}). Consultez le <a href=\"" . route('conformite.index') . '" class="alert-link fw-bold">Contrôle de Conformité</a> pour plus de détails.');
-            }
-
             Storage::delete('conformite_diagnostic.json');
             Session::forget('conformite_diagnostic');
 
             return redirect()->route('planning.results')
-                ->with('success', "✓ {$pct}% des étudiants affectés. Aucun conflit d'horaire détecté.");
+                ->with('success', "✓ 100% des étudiants affectés. Aucun conflit d'horaire détecté.");
         } catch (\Exception $e) {
-            return redirect()->route('affectation.index')
+            return redirect()->route('conformite.index')
                 ->with('error', 'Erreur lors de la génération : ' . $e->getMessage());
         }
     }
@@ -420,7 +455,10 @@ class AssignmentController extends Controller
         $lastEtudiant = Etudiant::latest()->first();
         $lastEnseignant = Enseignant::latest()->first();
 
-        if ($snapshot && $lastEtudiant === null) {
+        // No active planning in DB → show empty state
+        $noActivePlanning = Soutenance::count() === 0;
+
+        if ($snapshot && ($lastEtudiant === null || $noActivePlanning)) {
             $snapshot = null;
         }
 

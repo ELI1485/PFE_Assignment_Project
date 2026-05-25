@@ -14,19 +14,15 @@ class ConformiteController extends Controller
 {
     public function index()
     {
-        // If no planning has been generated yet (no soutenances in DB),
-        // there is nothing to diagnose — this also covers the case where
-        // affectation was never run.
-        if (Soutenance::count() === 0) {
-            return view('conformite.index', ['diagnostic' => null]);
-        }
-
         // 1. Try to load from persistent JSON file (written at last algorithm run)
         if (Storage::exists('conformite_diagnostic.json')) {
             $content = Storage::get('conformite_diagnostic.json');
             $diagnostic = $content ? json_decode($content, true) : [];
         } elseif (Session::has('conformite_diagnostic')) {
             $diagnostic = Session::get('conformite_diagnostic');
+        } elseif (Soutenance::count() === 0) {
+            // No planning has been generated and no diagnostic exists.
+            return view('conformite.index', ['diagnostic' => null]);
         } else {
             $diagnostic = $this->buildLiveDiagnostic();
         }
