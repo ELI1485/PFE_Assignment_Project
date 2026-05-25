@@ -3,33 +3,66 @@
 namespace App\Services;
 
 use App\Models\Enseignant;
+use Illuminate\Support\Str;
 
 class PdfExportService
 {
+    /**
+     * Filiere color codes used consistently in PDF, Word and the PV
+     * dashboard. Keep these in sync with the values produced by
+     * applyFiliereColor() so all three surfaces match.
+     */
+    public const COLOR_TDIA = '#C6EFCE'; // green
+    public const COLOR_ID   = '#F4B183'; // orange
+    public const COLOR_GI   = '#BDD7EE'; // blue
+    public const COLOR_NONE = '#ffffff';
+
     public function __construct() {}
 
+    /**
+     * Map a filiere label (short code, accented full name, or anything
+     * the unified import produced) to its background color.
+     *
+     * The function is robust against:
+     *   - Short codes "GI", "ID", "TDIA" produced by the unified import
+     *   - Accented full names ("Génie Informatique", "Ingénierie des
+     *     Données", "Transformation Digitale & Intelligence Artificielle")
+     *   - Mixed casing and stray whitespace
+     */
     public static function applyFiliereColor(string $filiere): string
     {
-        $exact = [
-            'Transformation Digitale & Intelligence Artificielle' => '#C6EFCE',
-            'Ingénierie des Données' => '#F4B183',
-            'Génie Informatique' => '#BDD7EE',
-        ];
-        if (isset($exact[$filiere])) {
-            return $exact[$filiere];
+        $normalized = strtoupper(Str::ascii(trim($filiere)));
+
+        if ($normalized === '') {
+            return self::COLOR_NONE;
         }
 
-        if (strpos($filiere, 'Transformation') !== false || strpos($filiere, 'TDIA') !== false) {
-            return '#C6EFCE';
-        }
-        if (strpos($filiere, 'Ing') !== false || strpos($filiere, 'Donn') !== false) {
-            return '#F4B183';
-        }
-        if (strpos($filiere, 'nie') !== false || strpos($filiere, 'Informatique') !== false) {
-            return '#BDD7EE';
+        // TDIA — green (check first so 'ID' inside 'TDIA' does not steal it)
+        if ($normalized === 'TDIA'
+            || str_contains($normalized, 'TRANSFORM')
+            || str_contains($normalized, 'ARTIFIC')
+            || str_contains($normalized, 'INTELLIGENCE')) {
+            return self::COLOR_TDIA;
         }
 
-        return '#ffffff';
+        // ID — orange (Ingénierie des Données)
+        if ($normalized === 'ID'
+            || str_contains($normalized, 'INGENIERIE')
+            || str_contains($normalized, 'DONNEES')
+            || str_contains($normalized, 'DONN')) {
+            return self::COLOR_ID;
+        }
+
+        // GI — blue (Génie Informatique). Checked AFTER ID so "Ingénierie
+        // Informatique" (if it ever appears) lands on ID, not GI.
+        if ($normalized === 'GI'
+            || str_contains($normalized, 'GENIE INFORMATIQUE')
+            || str_contains($normalized, 'INFORMATIQUE')
+            || $normalized === 'GENIE') {
+            return self::COLOR_GI;
+        }
+
+        return self::COLOR_NONE;
     }
 
 
