@@ -12,6 +12,7 @@ use App\Models\Soutenance;
 use App\Services\AssignmentService;
 use App\Services\HistoryService;
 use App\Services\PdfExportService;
+use App\Services\VerificationService;
 use App\Services\WordExportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class AssignmentController extends Controller
     public function __construct(
         protected AssignmentService $assignmentService,
         protected HistoryService $historyService,
+        protected VerificationService $verificationService,
     ) {}
 
     // DASHBOARD ────────────────────────────────────────────────────────
@@ -89,7 +91,18 @@ class AssignmentController extends Controller
             && $latestSnapshot->created_at > ($lastEtudiant?->created_at ?? now()->subCentury())
             && $latestSnapshot->created_at > ($lastEnseignant?->created_at ?? now()->subCentury());
 
-        return view('affectation.index', compact('projets', 'enseignants', 'etudiants', 'snapshots', 'hasSnapshot'));
+        // Lightweight audit count so the affectation page can hint the user
+        // to open the dedicated "Audit des Contraintes" view when needed.
+        $affectationAuditCount = count($this->verificationService->checkAffectations()['anomalies']);
+
+        return view('affectation.index', compact(
+            'projets',
+            'enseignants',
+            'etudiants',
+            'snapshots',
+            'hasSnapshot',
+            'affectationAuditCount'
+        ));
     }
 
     public function runAffectation()
@@ -289,13 +302,8 @@ class AssignmentController extends Controller
 
                 // Do NOT save to history — only 100% plannings are saved.
                 return redirect()->route('conformite.index')
-                    ->with('error', sprintf(
-                        '⚠️ Le planning n\'a pas pu atteindre 100%% de complétion (seulement %d%% — %d/%d étudiants planifiés). '
-                        . 'Aucun planning n\'a été sauvegardé. Veuillez ajuster vos contraintes et relancer.',
-                        $pct,
-                        $affectes,
-                        $totalEtudiants
-                    ));
+                    ->with('error', "⚠️ Le planning n'a pas pu être généré à 100 %. "
+                        . "Aucun planning n'a été sauvegardé. Consultez la recommandation ci-dessous et ajustez vos contraintes avant de relancer.");
             }
 
             // ── 100 % success: build snapshot and save to history ──

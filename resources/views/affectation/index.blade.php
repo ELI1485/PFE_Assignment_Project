@@ -41,6 +41,20 @@
 @section('content')
 @include('partials.planning-start-modal')
 
+@if(($affectationAuditCount ?? 0) > 0)
+    <div class="alert alert-warning d-flex align-items-center gap-3 mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-4 flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <strong>{{ $affectationAuditCount }} anomalie{{ $affectationAuditCount > 1 ? 's' : '' }} d'affectation détectée{{ $affectationAuditCount > 1 ? 's' : '' }}.</strong>
+            Veuillez consulter la page « Audit des Contraintes » pour le détail et les recommandations.
+        </div>
+        <a href="{{ route('verification.index') }}" class="btn btn-warning btn-sm flex-shrink-0">
+            <i class="bi bi-shield-exclamation me-1"></i>
+            Voir l'audit
+        </a>
+    </div>
+@endif
+
 <div class="action-topbar">
     <div>
         <div class="action-topbar-title">Affectation Encadrants</div>

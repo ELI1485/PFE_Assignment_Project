@@ -10,6 +10,23 @@ use Illuminate\Support\Facades\Log;
 
 class VerificationService
 {
+    /**
+     * Recommended supervision load: how many students one professor is
+     * expected to supervise. Kept as a constant so both the service and
+     * the audit view can quote the same numbers.
+     */
+    public const ENCADREMENT_MIN = 3;
+    public const ENCADREMENT_MAX = 4;
+
+    /**
+     * Audit the supervisor (encadrant) assignment.
+     *
+     * Returns:
+     *  - moyenne: average students/prof (rounded to 2)
+     *  - anomalies: list of {type, message}
+     *  - rules: array of human-readable constraints actually checked, so
+     *           the audit view can stay in sync with the service.
+     */
     public function checkAffectations(): array
     {
         $enseignants = Enseignant::with('projets')->get();
@@ -20,10 +37,10 @@ class VerificationService
             $count = $enseignant->projets->sum(fn($projet) => 1 + ($projet->etudiant2_id ? 1 : 0));
             $totalEtudiantsAffectes += $count;
 
-            if ($count > 0 && ($count < 3 || $count > 4)) {
+            if ($count > 0 && ($count < self::ENCADREMENT_MIN || $count > self::ENCADREMENT_MAX)) {
                 $anomalies[] = [
                     'type' => "Ecart d'encadrement",
-                    'message' => "Le professeur {$enseignant->nom} {$enseignant->prenom} encadre {$count} etudiants (la norme est entre 3 et 4).",
+                    'message' => "Le professeur {$enseignant->nom} {$enseignant->prenom} encadre {$count} etudiants (la norme est entre " . self::ENCADREMENT_MIN . " et " . self::ENCADREMENT_MAX . ").",
                 ];
             }
         }
@@ -34,14 +51,25 @@ class VerificationService
         return [
             'moyenne' => $moyenne,
             'anomalies' => $anomalies,
+            'rules' => [
+                "Chaque enseignant doit encadrer entre " . self::ENCADREMENT_MIN . " et " . self::ENCADREMENT_MAX . " étudiants",
+                "La moyenne globale doit rester proche de la norme",
+            ],
         ];
     }
 
+    /**
+     * Audit the planning. The expected jury size is derived from the
+     * existing soutenances rather than hardcoded, so the audit honors
+     * whatever value was used when the planning was generated.
+     */
     public function checkPlannings(): array
     {
         $slotOrder = $this->slotOrder();
         $soutenances = Soutenance::with(['creneau', 'projet.encadrant', 'jury.enseignants'])->get();
         $professors = Enseignant::all()->keyBy('id');
+
+        $expectedJurySize = $this->detectExpectedJurySize($soutenances);
 
         $anomalies = [];
         $sallesParCreneau = [];
@@ -92,6 +120,7 @@ class VerificationService
                 $presidents,
                 $rapporteurs,
                 $professors,
+                $expectedJurySize,
                 $anomalies
             );
 
@@ -146,7 +175,53 @@ class VerificationService
         $this->detectRoomSaturation($soutenances, $anomalies);
         $this->detectJuryLoadImbalance($juryLoads, $professors, $anomalies);
 
-        return $anomalies;
+        return [
+            'anomalies' => $anomalies,
+            'expected_jury_size' => $expectedJurySize,
+            'soutenances_count' => $soutenances->count(),
+            'rules' => $this->planningRulesFor($expectedJurySize),
+        ];
+    }
+
+    /**
+     * Determine the jury size used for the active planning. Falls back to
+     * the conventional value (3) when no soutenance exists yet so the
+     * audit page is still informative on an empty database.
+     */
+    private function detectExpectedJurySize(Collection $soutenances): int
+    {
+        if ($soutenances->isEmpty()) {
+            return 3;
+        }
+
+        $sizes = $soutenances
+            ->map(fn(Soutenance $s) => $s->jury?->enseignants->count() ?? 0)
+            ->filter(fn(int $size) => $size > 0);
+
+        if ($sizes->isEmpty()) {
+            return 3;
+        }
+
+        // Most common size — robust against a few malformed jurys.
+        return (int) $sizes->countBy()
+            ->sortDesc()
+            ->keys()
+            ->first();
+    }
+
+    private function planningRulesFor(int $expectedJurySize): array
+    {
+        $rapporteurs = max(0, $expectedJurySize - 1);
+
+        return [
+            "Chaque jury doit avoir exactement {$expectedJurySize} membre(s) (1 président encadrant + {$rapporteurs} rapporteur(s))",
+            "Le président du jury doit être l'encadrant du projet",
+            "Au moins 2 professeurs informatique par jury",
+            "Aucun professeur ne peut être assigné à deux soutenances dans le même créneau",
+            "Repos d'au moins une heure entre deux soutenances pour un même enseignant",
+            "Pas de chevauchement de salle sur un même créneau",
+            "Charge des rapporteurs équilibrée entre enseignants",
+        ];
     }
 
     private function detectJuryComposition(
@@ -156,19 +231,22 @@ class VerificationService
         Collection $presidents,
         Collection $rapporteurs,
         Collection $professors,
+        int $expectedJurySize,
         array &$anomalies
     ): void {
         $juryIds = $jury->pluck('id')->all();
         $uniqueJuryIds = array_unique($juryIds);
+        $expectedRapporteurs = max(0, $expectedJurySize - 1);
 
-        if (count($juryIds) !== 3) {
+        if (count($juryIds) !== $expectedJurySize) {
             $anomalies[] = [
                 'type' => 'Jury incomplet',
-                'message' => "La soutenance #{$soutenance->id} doit avoir exactement 3 membres de jury, mais en a " . count($juryIds) . ".",
+                'message' => "La soutenance #{$soutenance->id} doit avoir exactement {$expectedJurySize} membres de jury, mais en a " . count($juryIds) . ".",
             ];
             Log::warning('Jury impossible or incomplete detected during verification.', [
                 'soutenance_id' => $soutenance->id,
                 'jury_member_count' => count($juryIds),
+                'expected_jury_size' => $expectedJurySize,
             ]);
         }
 
@@ -190,10 +268,10 @@ class VerificationService
             ];
         }
 
-        if ($rapporteurs->count() !== 2) {
+        if ($rapporteurs->count() !== $expectedRapporteurs) {
             $anomalies[] = [
                 'type' => 'Rapporteurs invalides',
-                'message' => "La soutenance #{$soutenance->id} doit avoir exactement 2 rapporteurs.",
+                'message' => "La soutenance #{$soutenance->id} doit avoir exactement {$expectedRapporteurs} rapporteur(s).",
             ];
         }
 

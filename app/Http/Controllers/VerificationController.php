@@ -16,12 +16,18 @@ class VerificationController extends Controller
     public function index()
     {
         $affectationData = $this->verificationService->checkAffectations();
-        $planningAnomalies = $this->verificationService->checkPlannings();
+        $planningData = $this->verificationService->checkPlannings();
 
         return view('verification.index', [
             'moyenneEncadrement' => $affectationData['moyenne'],
             'affectationAnomalies' => $affectationData['anomalies'],
-            'planningAnomalies' => $planningAnomalies,
+            'affectationRules' => $affectationData['rules'],
+            'planningAnomalies' => $planningData['anomalies'],
+            'planningRules' => $planningData['rules'],
+            'expectedJurySize' => $planningData['expected_jury_size'],
+            'soutenancesCount' => $planningData['soutenances_count'],
+            'encadrementMin' => VerificationService::ENCADREMENT_MIN,
+            'encadrementMax' => VerificationService::ENCADREMENT_MAX,
         ]);
     }
 }
