@@ -52,7 +52,6 @@ class AssignmentService
 
             $encadrant = $this->leastLoadedProfessor($enseignants, $loads);
             Projet::create([
-                'titre' => 'Projet PFE - ' . trim($etudiant->nom . ' ' . $etudiant->prenom),
                 'etudiant_id' => $etudiant->id,
                 'encadrant_id' => $encadrant->id,
             ]);
@@ -287,11 +286,13 @@ class AssignmentService
 
     private function compareProjects(Projet $a, Projet $b): int
     {
+        // Group projects of the same filière together (sort by filiere_id),
+        // then by id for a stable, deterministic order.
         return [
-            $this->normalizeFiliere($a->etudiant?->filiere ?? ''),
+            $a->etudiant?->filiere_id ?? PHP_INT_MAX,
             $a->id,
         ] <=> [
-            $this->normalizeFiliere($b->etudiant?->filiere ?? ''),
+            $b->etudiant?->filiere_id ?? PHP_INT_MAX,
             $b->id,
         ];
     }
@@ -493,7 +494,6 @@ class AssignmentService
                 'jury_id' => $jury->id,
                 'creneau_id' => $package['creneau']->id,
                 'salle_id' => $package['salle']->id,
-                'langue' => $projet->langue_soutenance ?? 'Francais',
             ]);
         });
     }
@@ -743,25 +743,6 @@ class AssignmentService
             : substr((string) $creneau->heure_debut, 0, 5);
 
         return $slotOrder[$slotKey] ?? null;
-    }
-
-    private function normalizeFiliere(string $filiere): string
-    {
-        $filiere = strtoupper($filiere);
-
-        if (str_contains($filiere, 'TDIA') || str_contains($filiere, 'TRANSFORM')) {
-            return 'TDIA';
-        }
-
-        if (str_contains($filiere, 'ING') && str_contains($filiere, 'DONN')) {
-            return 'ID';
-        }
-
-        if (str_contains($filiere, 'INFORMATIQUE') || $filiere === 'GI') {
-            return 'GI';
-        }
-
-        return 'AUTRE';
     }
 
     private function isInfoProfessor(Enseignant $professor): bool

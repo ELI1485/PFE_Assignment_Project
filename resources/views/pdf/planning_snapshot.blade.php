@@ -28,10 +28,10 @@
 </head>
 <body>
     <div class="header">
-        <h1>Ecole Nationale des Sciences Appliquées - Al Hoceima</h1>
-        <h2>Département Mathématiques et Informatique</h2>
+        <h1>{{ \App\Models\Configuration::get('etablissement') }}</h1>
+        <h2>{{ \App\Models\Configuration::get('departement') }}</h2>
         <h3>Planning des soutenances des Projets de Fin d'Etude</h3>
-        <div class="session">(Première Session)</div>
+        <div class="session">({{ \App\Models\Configuration::get('session') }})</div>
         <div class="annee">Année Universitaire {{ $anneeUniversitaire ?? (date('n') < 9 ? (date('Y') - 1) . '/' . date('Y') : date('Y') . '/' . (date('Y') + 1)) }}</div>
     </div>
 
@@ -61,8 +61,7 @@
             @foreach($rows as $i => $row)
             @php 
                 $fRaw = $row['filiere'] ?? '';
-                $f = strtoupper($fRaw); 
-                $filiereColor = \App\Services\PdfExportService::applyFiliereColor($fRaw);
+                $filiereColor = $row['filiere_color'] ?? \App\Services\PdfExportService::applyFiliereColor($fRaw);
                 
                 $encadrant = $row['encadrant'] ?? '';
                 $encColor = \App\Services\PdfExportService::getProfessorColor($encadrant);
@@ -74,11 +73,7 @@
                 $hasBinome = !empty($row['etudiant2_nom']);
                 $rowspan = $hasBinome ? 2 : 1;
                 
-                $filiereText = '';
-                if(str_contains($f,'TDIA') || str_contains($f,'TRANSFORM') || str_contains($f,'ARTIFIC')) $filiereText = 'TDIA';
-                elseif(str_contains($f,'ING') && str_contains($f,'DONN') || $f === 'ID') $filiereText = 'ID';
-                elseif(str_contains($f,'G') && str_contains($f,'NIE') || str_contains($f,'INFORMATIQUE') || $f === 'GI') $filiereText = 'GI';
-                else $filiereText = $fRaw;
+                $filiereText = $fRaw;
             @endphp
             <tr>
                 <td rowspan="{{ $rowspan }}" style="background-color: {{ $encColor }}; text-align: center; font-weight:bold;">{{ $i+1 }}</td>

@@ -18,7 +18,6 @@ class Soutenance extends Model
         'jury_id',
         'salle_id',
         'creneau_id',
-        'langue',
     ];
 
     public function projet()

@@ -2,95 +2,65 @@
 
 namespace App\Services;
 
-use App\Models\Enseignant;
-use Illuminate\Support\Str;
+use App\Models\Filiere;
 
 class PdfExportService
 {
-    /**
-     * Filiere color codes used consistently in PDF, Word and the PV
-     * dashboard. Keep these in sync with the values produced by
-     * applyFiliereColor() so all three surfaces match.
-     */
-    public const COLOR_TDIA = '#C6EFCE'; // green
-    public const COLOR_ID   = '#F4B183'; // orange
-    public const COLOR_GI   = '#BDD7EE'; // blue
     public const COLOR_NONE = '#ffffff';
 
     public function __construct() {}
 
     /**
-     * Map a filiere label (short code, accented full name, or anything
-     * the unified import produced) to its background color.
+     * Resolve the background color for a filière.
      *
-     * The function is robust against:
-     *   - Short codes "GI", "ID", "TDIA" produced by the unified import
-     *   - Accented full names ("Génie Informatique", "Ingénierie des
-     *     Données", "Transformation Digitale & Intelligence Artificielle")
-     *   - Mixed casing and stray whitespace
+     * Accepts either:
+     *   - a filière id (int or numeric string), or
+     *   - a filière name string ("GI", "Médecine", "Génie Informatique", …)
+     *
+     * The color is looked up from the `filieres` table. Unknown / empty
+     * values fall back to white. No filière name is hardcoded anywhere.
      */
-    public static function applyFiliereColor(string $filiere): string
+    public static function applyFiliereColor($filiere): string
     {
-        $normalized = strtoupper(Str::ascii(trim($filiere)));
-
-        if ($normalized === '') {
+        if ($filiere === null || $filiere === '') {
             return self::COLOR_NONE;
         }
 
-        // TDIA — green (check first so 'ID' inside 'TDIA' does not steal it)
-        if ($normalized === 'TDIA'
-            || str_contains($normalized, 'TRANSFORM')
-            || str_contains($normalized, 'ARTIFIC')
-            || str_contains($normalized, 'INTELLIGENCE')) {
-            return self::COLOR_TDIA;
+        $model = null;
+
+        if (is_int($filiere) || (is_string($filiere) && ctype_digit($filiere))) {
+            $model = self::filiereCache()->get((int) $filiere);
+        } else {
+            $name = mb_strtolower(trim((string) $filiere));
+            $model = self::filiereCache()->first(
+                fn (Filiere $f) => mb_strtolower($f->nom) === $name
+            );
         }
 
-        // ID — orange (Ingénierie des Données)
-        if ($normalized === 'ID'
-            || str_contains($normalized, 'INGENIERIE')
-            || str_contains($normalized, 'DONNEES')
-            || str_contains($normalized, 'DONN')) {
-            return self::COLOR_ID;
-        }
-
-        // GI — blue (Génie Informatique). Checked AFTER ID so "Ingénierie
-        // Informatique" (if it ever appears) lands on ID, not GI.
-        if ($normalized === 'GI'
-            || str_contains($normalized, 'GENIE INFORMATIQUE')
-            || str_contains($normalized, 'INFORMATIQUE')
-            || $normalized === 'GENIE') {
-            return self::COLOR_GI;
-        }
-
-        return self::COLOR_NONE;
+        return $model?->couleur ?: self::COLOR_NONE;
     }
 
+    /**
+     * Cached collection of all filières (keyed by id) for the request lifetime.
+     */
+    protected static ?\Illuminate\Support\Collection $filiereCache = null;
 
-    public static function getProfessorColor(string $name): string
+    protected static function filiereCache(): \Illuminate\Support\Collection
     {
-        $palette = [
-            '#0000FF', '#FF0000', '#008000', '#FFD700',
-            '#D0006F', '#00FFFF', '#FFA500', '#7F00FF',
-            '#4169E1', '#FF69B4', '#BFFF00', '#8B4513',
-            '#7FFFD4', '#E0115F', '#EAA221', '#00A86B',
-            '#007FFF', '#FA8072', '#808000', '#C8A2C8',
-            '#FF7518', '#40E0D0', '#A83C09', '#E6E6FA',
-            '#808080', '#FF7F50', '#8F9779', '#FF00FF',
-            '#C19A6B', '#E0B0FF', '#CD7F32', '#BDB76B',
-        ];
-
-        $profs = Enseignant::select('nom', 'prenom')->get()
-            ->map(fn ($e) => trim(strtoupper($e->nom.' '.$e->prenom)))
-            ->unique()
-            ->values();
-
-        $mapping = [];
-        foreach ($profs as $i => $p) {
-            $mapping[$p] = $palette[$i % count($palette)];
+        if (self::$filiereCache === null) {
+            self::$filiereCache = Filiere::all()->keyBy('id');
         }
 
-        $cleanName = trim(strtoupper(preg_replace('/^(?:D|P)r\.\s*/i', '', $name)));
+        return self::$filiereCache;
+    }
 
-        return $mapping[$cleanName] ?? '#ffffff';
+    /**
+     * Deterministic, unique professor color (delegated to ColorService).
+     * Same professor always resolves to the same color regardless of ordering,
+     * and never collides with a filière color.
+     */
+    public static function getProfessorColor(string $name): string
+    {
+        return ColorService::professorColor($name);
     }
 }

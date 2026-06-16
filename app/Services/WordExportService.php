@@ -45,13 +45,13 @@ class WordExportService
         $headerCell = $headerTable->addRow()->addCell(8000);
 
         $headerCell->addText(
-            'Ecole Nationale des Sciences Appliquées - Al Hoceima',
+            \App\Models\Configuration::get('etablissement'),
             ['bold' => true, 'size' => 12],
             array_merge($center, ['spaceAfter' => 40])
         );
 
         $headerCell->addText(
-            'Département Mathématiques et Informatique',
+            \App\Models\Configuration::get('departement'),
             ['size' => 11],
             array_merge($center, ['spaceAfter' => 40])
         );
@@ -63,7 +63,7 @@ class WordExportService
                 array_merge($center, ['spaceAfter' => 40])
             );
             $headerCell->addText(
-                '(Première Session)',
+                '('.\App\Models\Configuration::get('session').')',
                 ['size' => 10, 'italic' => true],
                 array_merge($center, ['spaceAfter' => 40])
             );
@@ -94,9 +94,16 @@ class WordExportService
                 $table->addCell(8000)->addText($text, ['size' => 9]);
             };
 
-            $addLegend($legendTable, 'C6EFCE', 'Filière TDIA — Transformation Digitale et Intelligence Artificielle');
-            $addLegend($legendTable, 'F4B183', 'Filière ID — Ingénierie des Données');
-            $addLegend($legendTable, 'BDD7EE', 'Filière GI — Génie Informatique');
+            // Dynamic legend — built from the filières actually present in the
+            // snapshot data, each with its own assigned color. No hardcoding.
+            $legendRows = collect($snapshot->data)
+                ->filter(fn ($r) => ! empty($r['filiere']))
+                ->groupBy('filiere')
+                ->map(fn ($items) => $items->first()['filiere_color'] ?? ($items->first()['bg'] ?? '#ffffff'));
+
+            foreach ($legendRows as $filiereName => $color) {
+                $addLegend($legendTable, ltrim((string) $color, '#'), 'Filière '.$filiereName);
+            }
 
             $section->addTextBreak(1);
         }
@@ -177,8 +184,7 @@ class WordExportService
         foreach ($rows as $i => $row) {
             $bgBase = $i % 2 === 0 ? 'FFFFFF' : 'DDEBF7';
 
-            $f = strtoupper($row['filiere'] ?? '');
-            $filiereColor = PdfExportService::applyFiliereColor($row['filiere'] ?? '');
+            $filiereColor = $row['filiere_color'] ?? PdfExportService::applyFiliereColor($row['filiere'] ?? '');
 
             $encadrant = $row['encadrant'] ?? '';
             $encColor = PdfExportService::getProfessorColor($encadrant);
@@ -218,16 +224,7 @@ class WordExportService
                 $prenomCell->addText($row['etudiant2_prenom'], ['size' => 8]);
             }
 
-            $fText = '';
-            if (str_contains($f, 'TDIA')) {
-                $fText = 'TDIA';
-            } elseif (str_contains($f, 'GI')) {
-                $fText = 'GI';
-            } elseif (str_contains($f, 'ID')) {
-                $fText = 'ID';
-            } else {
-                $fText = $row['filiere'] ?? '';
-            }
+            $fText = $row['filiere'] ?? '';
 
             $table->addCell($widths[$baseColIdx + 5], ['bgColor' => ltrim($filiereColor, '#')])->addText($fText, ['bold' => true, 'size' => 8], $centerPara);
         }
@@ -235,13 +232,6 @@ class WordExportService
 
     private function addAffectationTable(Section $section, Collection $rows): void
     {
-        $bgToWord = [
-            '#C6EFCE' => 'C6EFCE',
-            '#BDD7EE' => 'BDD7EE',
-            '#F4B183' => 'F4B183',
-            '#ffffff' => 'FFFFFF',
-        ];
-
         $phpWord = $section->getPhpWord();
         $phpWord->addTableStyle('AffTable', [
             'borderSize' => 6,

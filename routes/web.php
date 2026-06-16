@@ -6,6 +6,7 @@ use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PvController;
 use App\Http\Controllers\SalleController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VerificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -58,3 +59,10 @@ Route::get('/verification', [VerificationController::class, 'index'])->name('ver
 
 // Contrôle de Conformité
 Route::get('/conformite', [ConformiteController::class, 'index'])->name('conformite.index');
+
+// ─── Paramètres (filières, couleurs, en-tête des documents) ───────────────────
+Route::get('/parametres', [SettingsController::class, 'index'])->name('settings.index');
+Route::post('/parametres/config', [SettingsController::class, 'updateConfig'])->name('settings.config');
+Route::post('/parametres/filieres', [SettingsController::class, 'storeFiliere'])->name('settings.filieres.store');
+Route::put('/parametres/filieres/{id}', [SettingsController::class, 'updateFiliere'])->name('settings.filieres.update');
+Route::delete('/parametres/filieres/{id}', [SettingsController::class, 'destroyFiliere'])->name('settings.filieres.destroy');

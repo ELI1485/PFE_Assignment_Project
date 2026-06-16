@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Creneau;
 use App\Models\Enseignant;
 use App\Models\Etudiant;
+use App\Models\Filiere;
 use App\Models\Jury;
 use App\Models\Projet;
 use App\Models\Soutenance;
@@ -23,35 +24,32 @@ class ExcelImportService
     }
 
     /**
-     * Import a single Excel workbook that contains exactly 4 sheets:
-     *   - Sheet 0: Students for GI (Génie Informatique)
-     *   - Sheet 1: Students for ID (Ingénierie des Données)
-     *   - Sheet 2: Students for TDIA (Transformation Digitale & Intelligence Artificielle)
-     *   - Sheet 3: Professors (header on row 2, data from row 3)
+     * Import a single Excel workbook that contains exactly 2 sheets:
+     *   - Sheet 1 (index 0): Étudiants — ALL filières mixed together.
+     *       Columns (header on row 1, data from row 2):
+     *       CNE | Nom | Prénom | Filière | CNE Binôme | Nom Binôme | Prénom Binôme
+     *       The "Filière" value is read from each row and can be ANY string.
+     *       Filière records are auto-created (with a distinct color) when new.
+     *   - Sheet 2 (index 1): Professeurs (header on row 2, data from row 3)
+     *       Columns: Nom | Prénom | Discipline
      *
      * The full planning state (juries, soutenances, creneaux, projets,
      * etudiants and enseignants) is wiped beforehand so the imported file
-     * becomes the authoritative source of truth.
+     * becomes the authoritative source of truth. Filière records are kept so
+     * their assigned colors stay stable across imports.
      */
     public function importUnified(UploadedFile $file): array
     {
         $allSheets = Excel::toArray([], $file);
 
-        if (count($allSheets) < 4) {
+        if (count($allSheets) < 2) {
             throw new \RuntimeException(
-                "Le fichier doit contenir exactement 4 feuilles : Étudiants GI (feuille 1), Étudiants ID (feuille 2), Étudiants TDIA (feuille 3) et Professeurs (feuille 4). " .
+                "Le fichier doit contenir exactement 2 feuilles : Étudiants (feuille 1) et Professeurs (feuille 2). " .
                 "Seulement " . count($allSheets) . " feuille(s) détectée(s)."
             );
         }
 
-        // Sheet → filière mapping (by position)
-        $sheetFiliereMap = [
-            0 => 'GI',
-            1 => 'ID',
-            2 => 'TDIA',
-        ];
-
-        return DB::transaction(function () use ($allSheets, $sheetFiliereMap) {
+        return DB::transaction(function () use ($allSheets) {
             // Wipe the planning + people state — the unified import is authoritative.
             DB::table('jury_enseignant')->delete();
             Soutenance::query()->delete();
@@ -61,16 +59,12 @@ class ExcelImportService
             Etudiant::query()->delete();
             Enseignant::query()->delete();
 
-            $totalEtudiants = 0;
+            // Sheet 1 — students (all filières mixed)
+            $studentRows = $allSheets[0] ?? [];
+            $totalEtudiants = $this->insertStudentsFromRows($studentRows);
 
-            // Import students from sheets 0, 1, 2 with forced filière
-            foreach ($sheetFiliereMap as $sheetIndex => $filiere) {
-                $studentRows = $allSheets[$sheetIndex] ?? [];
-                $totalEtudiants += $this->insertStudentsFromRows($studentRows, $filiere);
-            }
-
-            // Import professors from sheet 3
-            $professorRows = $allSheets[3] ?? [];
+            // Sheet 2 — professors
+            $professorRows = $allSheets[1] ?? [];
             $totalEnseignants = $this->insertProfessorsFromRows($professorRows);
 
             return [
@@ -80,9 +74,12 @@ class ExcelImportService
         });
     }
 
-    private function insertStudentsFromRows(array $rows, ?string $fallbackFiliere = null): int
+    private function insertStudentsFromRows(array $rows): int
     {
         $count = 0;
+
+        // Cache of filière name (lower-case) => Filiere model for this import.
+        $filiereCache = [];
 
         foreach ($rows as $index => $row) {
             // Skip the header row.
@@ -90,11 +87,10 @@ class ExcelImportService
                 continue;
             }
 
-            $row = array_pad($row, 9, null);
+            $row = array_pad($row, 7, null);
             [
-                $cne, $nom, $prenom, $filiere,
+                $cne, $nom, $prenom, $filiereName,
                 $cne2, $nom2, $prenom2,
-                $sujet, $langue,
             ] = $row;
 
             $nom    = trim((string) $nom);
@@ -103,13 +99,13 @@ class ExcelImportService
                 continue;
             }
 
-            $resolvedFiliere = trim((string) $filiere) !== '' ? trim((string) $filiere) : ($fallbackFiliere ?: 'Inconnue');
+            $filiere = $this->resolveFiliere(trim((string) $filiereName), $filiereCache);
 
             $etudiant = Etudiant::create([
-                'cne'     => trim((string) $cne) ?: null,
-                'nom'     => $nom,
-                'prenom'  => $prenom,
-                'filiere' => $resolvedFiliere,
+                'cne'        => trim((string) $cne) ?: null,
+                'nom'        => $nom,
+                'prenom'     => $prenom,
+                'filiere_id' => $filiere->id,
             ]);
 
             $etudiant2Id = null;
@@ -117,27 +113,49 @@ class ExcelImportService
             $prenom2 = trim((string) $prenom2);
             if ($nom2 !== '' && $prenom2 !== '') {
                 $etudiant2 = Etudiant::create([
-                    'cne'     => trim((string) $cne2) ?: null,
-                    'nom'     => $nom2,
-                    'prenom'  => $prenom2,
-                    'filiere' => $resolvedFiliere,
+                    'cne'        => trim((string) $cne2) ?: null,
+                    'nom'        => $nom2,
+                    'prenom'     => $prenom2,
+                    'filiere_id' => $filiere->id,
                 ]);
                 $etudiant2Id = $etudiant2->id;
             }
 
             Projet::create([
-                'cne'              => trim((string) $cne) ?: null,
-                'etudiant_id'      => $etudiant->id,
-                'etudiant2_id'     => $etudiant2Id,
-                'sujet'            => trim((string) $sujet),
-                'titre'            => trim((string) $sujet),
-                'langue_soutenance' => trim((string) ($langue ?: 'Francais')),
+                'cne'          => trim((string) $cne) ?: null,
+                'etudiant_id'  => $etudiant->id,
+                'etudiant2_id' => $etudiant2Id,
             ]);
 
             $count += $etudiant2Id ? 2 : 1;
         }
 
         return $count;
+    }
+
+    /**
+     * Resolve (find or auto-create) a Filiere from a raw name read in the
+     * student sheet. New filières get a distinct color from the palette.
+     */
+    private function resolveFiliere(string $name, array &$cache): Filiere
+    {
+        if ($name === '') {
+            $name = 'Inconnue';
+        }
+
+        $key = mb_strtolower($name);
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        // Colors already chosen during THIS import but possibly not yet seen
+        // by the DB query inside findOrCreateByName.
+        $extraUsed = array_map(fn (Filiere $f) => $f->couleur, array_values($cache));
+
+        $filiere = Filiere::findOrCreateByName($name, $extraUsed);
+        $cache[$key] = $filiere;
+
+        return $filiere;
     }
 
     private function insertProfessorsFromRows(array $rows): int

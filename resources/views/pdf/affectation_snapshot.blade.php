@@ -73,27 +73,29 @@
 
 {{-- ─── Institution Header ─── --}}
 <div class="header-box">
-    <div class="school">Ecole Nationale des Sciences Appliquées - Al Hoceima</div>
-    <div class="dept">Département Mathématiques et Informatique</div>
+    <div class="school">{{ \App\Models\Configuration::get('etablissement') }}</div>
+    <div class="dept">{{ \App\Models\Configuration::get('departement') }}</div>
     <div class="doc-type">Affectation des encadrants de Projet de Fin d'Etude</div>
     <div class="annee">Année Universitaire {{ date('n') < 9 ? (date('Y') - 1) . '/' . date('Y') : date('Y') . '/' . (date('Y') + 1) }}</div>
 </div>
 
-{{-- ─── Color Legend ─── --}}
+{{-- ─── Color Legend (dynamic — built from the filières present) ─── --}}
+@php
+    $legend = $rows
+        ->filter(fn ($r) => !empty($r['filiere']))
+        ->groupBy('filiere')
+        ->map(fn ($items) => $items->first()['filiere_color'] ?? ($items->first()['bg'] ?? '#ffffff'));
+@endphp
+@if($legend->isNotEmpty())
 <table class="legend-table">
+    @foreach($legend as $filiereName => $color)
     <tr>
-        <td><div style="width:26px;height:11px;background-color:#C6EFCE;">&nbsp;</div></td>
-        <td>Filière TDIA — Transformation Digitale &amp; Intelligence Artificielle</td>
+        <td><div style="width:26px;height:11px;background-color:{{ $color }};">&nbsp;</div></td>
+        <td>Filière {{ $filiereName }}</td>
     </tr>
-    <tr>
-        <td><div style="width:26px;height:11px;background-color:#F4B183;">&nbsp;</div></td>
-        <td>Filière ID — Ingénierie des Données</td>
-    </tr>
-    <tr>
-        <td><div style="width:26px;height:11px;background-color:#BDD7EE;">&nbsp;</div></td>
-        <td>Filière GI — Génie Informatique</td>
-    </tr>
+    @endforeach
 </table>
+@endif
 
 {{-- ─── Table (bg pre-computed in controller, sorted alphabetically) ─── --}}
 @php

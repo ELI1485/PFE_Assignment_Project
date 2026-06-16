@@ -41,21 +41,10 @@
                         @php
                             $etudiant = $soutenance->projet?->etudiant;
                             $encadrant = $soutenance->projet?->encadrant;
-                            $filiere = $etudiant?->filiere ?? '';
-                            $bgColor = \App\Services\PdfExportService::applyFiliereColor($filiere);
-                            $textColor = '#000000';
-
-                            if (in_array($bgColor, ['#BDD7EE'])) {
-                                $textColor = '#0F172A';
-                            }
-
-                            if (in_array($bgColor, ['#C6EFCE'])) {
-                                $textColor = '#065F46';
-                            }
-
-                            if (in_array($bgColor, ['#F4B183'])) {
-                                $textColor = '#7C2D12';
-                            }
+                            $filiere = $etudiant?->filiere;
+                            $filiereName = $filiere?->nom ?? '';
+                            $bgColor = $filiere?->couleur ?: '#eef2f7';
+                            $textColor = \App\Services\ColorService::readableTextColor($bgColor);
                         @endphp
 
                         <tr>
@@ -74,7 +63,7 @@
                                 @if ($etudiant)
                                     <span class="pv-badge"
                                         style="background-color: {{ $bgColor }}; color: {{ $textColor }};">
-                                        {{ $filiere }}
+                                        {{ $filiereName ?: '-' }}
                                     </span>
                                 @endif
                             </td>

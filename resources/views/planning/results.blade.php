@@ -214,19 +214,9 @@
             <tbody>
                 @forelse($soutenances as $index => $row)
                     @php
-                        $filiere = mb_strtoupper($row['filiere'] ?? '', 'UTF-8');
-                        $fShort = '-';
-                        $fClass = 'f-other';
-                        if (str_contains($filiere, 'TDIA') || str_contains($filiere, 'TRANSFORM') || str_contains($filiere, 'ARTIF') || str_contains($filiere, 'INTELLIGENCE')) {
-                            $fShort = 'TDIA';
-                            $fClass = 'f-tdia';
-                        } elseif (str_contains($filiere, 'DONN') || ($filiere === 'ID') || (str_contains($filiere, 'ING') && str_contains($filiere, 'DONN'))) {
-                            $fShort = 'ID';
-                            $fClass = 'f-id';
-                        } elseif (str_contains($filiere, 'GENIE') || str_contains($filiere, 'GÉNIE') || ($filiere === 'GI') || str_contains($filiere, 'INFORMATIQUE')) {
-                            $fShort = 'GI';
-                            $fClass = 'f-gi';
-                        }
+                        $filiereName = $row['filiere'] ?? '';
+                        $filiereBg = $row['filiere_color'] ?? \App\Services\PdfExportService::applyFiliereColor($filiereName);
+                        $filiereTextColor = \App\Services\ColorService::readableTextColor($filiereBg);
                         $nbRapporteurs = count($row['examinateurs'] ?? []);
                         $juryOk = $nbRapporteurs >= 1 && !empty($row['president']) && $row['president'] !== 'N/A';
                     @endphp
@@ -237,10 +227,9 @@
                             @if(!empty($row['etudiant2_nom']))
                                 <div class="fw-semibold text-dark border-top mt-2 pt-2">{{ $row['etudiant2_nom'] }} {{ $row['etudiant2_prenom'] ?? '' }}</div>
                             @endif
-                            <div class="text-muted small mt-1">Sujet: {{ $row['titre'] ?? '-' }}</div>
                         </td>
                         <td>
-                            <span class="filiere-badge {{ $fClass }}">{{ $fShort !== '-' ? $fShort : ($filiere ?: '-') }}</span>
+                            <span class="filiere-badge" style="background: {{ $filiereBg }}; color: {{ $filiereTextColor }};">{{ $filiereName ?: '-' }}</span>
                         </td>
                         <td class="fw-semibold text-dark">
                             {{ $row['encadrant'] ?? '-' }}

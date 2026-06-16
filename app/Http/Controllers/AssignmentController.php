@@ -47,21 +47,21 @@ class AssignmentController extends Controller
             'total_soutenances' => $latestPlanning?->soutenances_count ?? 0,
         ];
 
-        $rawFiliere = Etudiant::selectRaw('filiere, COUNT(*) as total')->groupBy('filiere')->get();
-        $parFiliereData = [];
-        foreach ($rawFiliere as $item) {
-            $f = mb_strtoupper($item->filiere ?? '', 'UTF-8');
-            $fShort = 'Autre';
-            if (str_contains($f, 'TDIA') || str_contains($f, 'TRANSFORM') || str_contains($f, 'ARTIFIC')) {
-                $fShort = 'TDIA';
-            } elseif (str_contains($f, 'ID') || str_contains($f, 'INGENIERIE') || str_contains($f, 'DONNÉES') || str_contains($f, 'DONNEES')) {
-                $fShort = 'ID';
-            } elseif (str_contains($f, 'GI') || str_contains($f, 'GENIE') || str_contains($f, 'GÉNIE')) {
-                $fShort = 'GI';
-            }
-            $parFiliereData[$fShort] = ($parFiliereData[$fShort] ?? 0) + $item->total;
-        }
-        $parFiliere = collect($parFiliereData);
+        // Dynamic distribution by filière — grouped purely on the DB relation,
+        // no hardcoded filière names. Each bar keeps the filière's own color.
+        $rawFiliere = Etudiant::select('filiere_id', DB::raw('COUNT(*) as total'))
+            ->groupBy('filiere_id')
+            ->with('filiere')
+            ->get()
+            ->sortByDesc('total')
+            ->values();
+
+        $parFiliere = $rawFiliere->mapWithKeys(
+            fn ($item) => [($item->filiere?->nom ?? 'Inconnue') => $item->total]
+        );
+        $parFiliereColors = $rawFiliere
+            ->map(fn ($item) => $item->filiere?->couleur ?? PdfExportService::COLOR_NONE)
+            ->values();
 
         $parEncadrant = Enseignant::withCount('projets')
             ->having('projets_count', '>', 0)
@@ -71,7 +71,7 @@ class AssignmentController extends Controller
             ->having('jurys_count', '>', 0)
             ->get();
 
-        return view('dashboard.index', compact('stats', 'parFiliere', 'parEncadrant', 'parJury', 'latestPlanning'));
+        return view('dashboard.index', compact('stats', 'parFiliere', 'parFiliereColors', 'parEncadrant', 'parJury', 'latestPlanning'));
     }
 
     // AFFECTATION ──────────────────────────────────────────────────────
@@ -115,7 +115,8 @@ class AssignmentController extends Controller
         $data = $projets->map(function ($p) {
             $e1 = $p->etudiant;
             $e2 = $p->etudiant2;
-            $bg = PdfExportService::applyFiliereColor($e1->filiere ?? '');
+            $filiere = $e1?->filiere;
+            $bg = $filiere?->couleur ?: PdfExportService::COLOR_NONE;
 
             return [
                 'etu_nom' => $e1?->nom,
@@ -124,7 +125,9 @@ class AssignmentController extends Controller
                 'etu2_nom' => $e2?->nom,
                 'etu2_prenom' => $e2?->prenom,
                 'etudiant2' => $e2 ? ($e2->nom . ' ' . $e2->prenom) : '',
-                'filiere' => $e1?->filiere,
+                'filiere' => $filiere?->nom,
+                'filiere_id' => $e1?->filiere_id,
+                'filiere_color' => $bg,
                 'bg' => $bg,
                 'encadrant' => $p->encadrant
                     ? ($p->encadrant->nom . ' ' . $p->encadrant->prenom)
@@ -236,7 +239,7 @@ class AssignmentController extends Controller
                     app(AssignmentService::class)
                     ->maxSoutenancesPerSlot();
 
-                $etudiantsNonAffectes = Etudiant::whereNotIn('id', $scheduledIds)->get();
+                $etudiantsNonAffectes = Etudiant::with('filiere')->whereNotIn('id', $scheduledIds)->get();
 
                 // ── Build actionable recommendations ──
                 $recommendations = [];
@@ -310,7 +313,8 @@ class AssignmentController extends Controller
                         return [
                             'nom' => $e->nom,
                             'prenom' => $e->prenom,
-                            'filiere' => $e->filiere,
+                            'filiere' => $e->filiere?->nom,
+                            'filiere_color' => $e->filiere?->couleur ?: PdfExportService::COLOR_NONE,
                             'encadrant' => $projet?->encadrant
                                 ? ($projet->encadrant->nom . ' ' . $projet->encadrant->prenom)
                                 : 'Non assigné',
@@ -330,7 +334,7 @@ class AssignmentController extends Controller
 
             // ── 100 % success: build snapshot and save to history ──
             $soutenances = Soutenance::with([
-                'projet.etudiant',
+                'projet.etudiant.filiere',
                 'projet.etudiant2',
                 'projet.encadrant',
                 'jury.enseignants',
@@ -349,8 +353,9 @@ class AssignmentController extends Controller
                     'etudiant_prenom' => $s->projet?->etudiant?->prenom,
                     'etudiant2_nom' => $s->projet?->etudiant2?->nom,
                     'etudiant2_prenom' => $s->projet?->etudiant2?->prenom,
-                    'titre' => $s->projet?->sujet ?? $s->projet?->titre,
-                    'filiere' => $s->projet?->etudiant?->filiere,
+                    'filiere' => $s->projet?->etudiant?->filiere?->nom,
+                    'filiere_id' => $s->projet?->etudiant?->filiere_id,
+                    'filiere_color' => $s->projet?->etudiant?->filiere?->couleur ?: PdfExportService::COLOR_NONE,
                     'encadrant' => $s->projet?->encadrant
                         ? ('Pr. ' . $s->projet->encadrant->nom . ' ' . $s->projet->encadrant->prenom)
                         : 'N/A',
@@ -557,7 +562,7 @@ class AssignmentController extends Controller
             ->values()
             ->toArray();
 
-        return Projet::with(['etudiant', 'etudiant2', 'encadrant'])
+        return Projet::with(['etudiant.filiere', 'etudiant2.filiere', 'encadrant'])
             ->whereNotIn('etudiant_id', $coveredAsEtudiant2)
             ->get();
     }

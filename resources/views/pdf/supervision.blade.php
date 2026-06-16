@@ -18,7 +18,7 @@
             <tr>
                 <th>Enseignant</th>
                 <th>Étudiant(s) Encadré(s)</th>
-                <th>Sujet du Projet</th>
+                <th>Filière</th>
             </tr>
         </thead>
         <tbody>
@@ -41,7 +41,7 @@
                                     N/A
                                 @endif
                             </td>
-                            <td>{{ $projet->titre }}</td>
+                            <td>{{ $projet->etudiant?->filiere?->nom ?? '-' }}</td>
                         </tr>
                     @endforeach
                 @endif

@@ -133,7 +133,7 @@ new Chart(ctx, {
         datasets: [{
             label: 'Étudiants',
             data: {!! json_encode($parFiliere->values()) !!},
-            backgroundColor: ['#3f67d5', '#24b57a', '#f4b23d', '#3cb7c7', '#d94b55'],
+            backgroundColor: {!! json_encode($parFiliereColors ?? []) !!},
             borderRadius: 8,
             borderSkipped: false,
         }]

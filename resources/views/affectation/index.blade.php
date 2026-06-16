@@ -120,15 +120,9 @@
                 <tbody>
                     @forelse($projets as $i => $projet)
                         @php
-                            $f = mb_strtoupper($projet->etudiant->filiere ?? '', 'UTF-8');
-                            $filiereCode = 'other';
-                            if (str_contains($f, 'TDIA') || str_contains($f, 'TRANSFORM') || str_contains($f, 'ARTIFIC')) {
-                                $filiereCode = 'tdia';
-                            } elseif (str_contains($f, 'INGÉNIERIE') || str_contains($f, 'INGENIERIE') || str_contains($f, 'DONNÉES') || str_contains($f, 'DONNEES') || str_contains($f, 'ID')) {
-                                $filiereCode = 'id';
-                            } elseif (str_contains($f, 'GÉNIE') || str_contains($f, 'GENIE') || str_contains($f, 'GI')) {
-                                $filiereCode = 'gi';
-                            }
+                            $filiere = $projet->etudiant?->filiere;
+                            $filiereBg = $filiere?->couleur ?: '#eef2f7';
+                            $filiereText = \App\Services\ColorService::readableTextColor($filiereBg);
                         @endphp
                         <tr>
                             <td class="text-muted small">#{{ str_pad($i + 1, 2, '0', STR_PAD_LEFT) }}</td>
@@ -143,14 +137,10 @@
                                 @endif
                             </td>
                             <td>
-                                @if ($filiereCode === 'tdia')
-                                    <span class="badge badge-tdia">TDIA</span>
-                                @elseif($filiereCode === 'gi')
-                                    <span class="badge badge-gi">GI</span>
-                                @elseif($filiereCode === 'id')
-                                    <span class="badge badge-id">ID</span>
+                                @if ($filiere)
+                                    <span class="badge" style="background: {{ $filiereBg }}; color: {{ $filiereText }};" title="{{ $filiere->nom_complet ?? $filiere->nom }}">{{ $filiere->nom }}</span>
                                 @else
-                                    <span class="badge badge-other">{{ $projet->etudiant->filiere ?? '-' }}</span>
+                                    <span class="badge badge-other">-</span>
                                 @endif
                             </td>
                             <td>

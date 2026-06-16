@@ -28,25 +28,9 @@ class PvService
 
         $template->setValue('nom_etudiant', $nom . ' ' . $prenom);
 
-        $filiere = strtoupper(trim($soutenance->projet->etudiant->filiere ?? ''));
-        $box_id = '☐';
-        $box_gi = '☐';
-        $box_tdia = '☐';
-
-        if (str_contains($filiere, 'TDIA') || str_contains($filiere, 'TRANSFORMATION')) {
-            $box_tdia = '☒';
-        } elseif (str_contains($filiere, 'GI') || str_contains($filiere, 'INFORMATIQUE')) {
-            $box_gi = '☒';
-        } elseif (str_contains($filiere, 'ID') || str_contains($filiere, 'DONN')) {
-            $box_id = '☒';
-        }
-
-        $template->setValue('box_id', $box_id);
-        $template->setValue('box_gi', $box_gi);
-        $template->setValue('box_tdia', $box_tdia);
-
-        $intitule_projet = $soutenance->projet->titre;
-        $template->setValue('intitule_rapport', $intitule_projet);
+        // Fully dynamic filière name (no hardcoded GI/ID/TDIA checkboxes).
+        $filiereName = $soutenance->projet->etudiant->filiere?->nom ?? '';
+        $template->setValue('filiere_name', $filiereName);
 
         $encadrant = $soutenance->projet->encadrant;
         $template->setValue('nom_encadrant', $encadrant->nom . ' ' . $encadrant->prenom);

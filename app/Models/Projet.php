@@ -12,9 +12,6 @@ class Projet extends Model
         'etudiant_id',
         'etudiant2_id',
         'encadrant_id',
-        'sujet',
-        'titre',
-        'langue_soutenance',
     ];
 
     public function etudiant()

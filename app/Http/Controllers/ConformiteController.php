@@ -73,7 +73,7 @@ class ConformiteController extends Controller
         $totalProjects = $this->canonicalProjectsCount();
         $scheduledProjects = Soutenance::distinct('projet_id')->count('projet_id');
 
-        $etudiantsNonAffectes = Etudiant::whereNotIn('id', $scheduledIds)->get();
+        $etudiantsNonAffectes = Etudiant::with('filiere')->whereNotIn('id', $scheduledIds)->get();
 
         return [
             'pct' => $pct,
@@ -95,7 +95,8 @@ class ConformiteController extends Controller
                 return [
                     'nom' => $e->nom,
                     'prenom' => $e->prenom,
-                    'filiere' => $e->filiere,
+                    'filiere' => $e->filiere?->nom,
+                    'filiere_color' => $e->filiere?->couleur ?: '#ffffff',
                     'encadrant' => $projet?->encadrant
                         ? ($projet->encadrant->nom.' '.$projet->encadrant->prenom)
                         : 'Non assigné',

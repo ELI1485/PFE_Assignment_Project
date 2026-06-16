@@ -66,6 +66,12 @@
                     <i class="bi bi-file-earmark-word nav-icon"></i>
                     <span>Génération des PVs</span>
                 </a>
+
+                <div class="nav-label">CONFIGURATION</div>
+                <a href="{{ route('settings.index') }}" class="nav-item {{ request()->routeIs('settings.*') ? 'active' : '' }}">
+                    <i class="bi bi-gear nav-icon"></i>
+                    <span>Paramètres</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">

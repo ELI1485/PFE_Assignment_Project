@@ -268,17 +268,14 @@
                     <tbody>
                         @foreach($diagnostic['etudiants_manquants'] as $i => $etudiant)
                             @php
-                                $f = mb_strtoupper($etudiant['filiere'] ?? '', 'UTF-8');
-                                $fShort = '-';
-                                $fClass = 'f-other';
-                                if (str_contains($f, 'TDIA') || str_contains($f, 'ARTIFIC')) { $fShort = 'TDIA'; $fClass = 'f-tdia'; }
-                                elseif (str_contains($f, 'GI') || str_contains($f, 'GENIE')) { $fShort = 'GI'; $fClass = 'f-gi'; }
-                                elseif (str_contains($f, 'ID') || str_contains($f, 'INGENIER')) { $fShort = 'ID'; $fClass = 'f-id'; }
+                                $filiereName = $etudiant['filiere'] ?? '';
+                                $filiereBg = $etudiant['filiere_color'] ?? '#eef2f7';
+                                $filiereTextColor = \App\Services\ColorService::readableTextColor($filiereBg);
                             @endphp
                             <tr>
                                 <td class="text-muted">{{ $i + 1 }}</td>
                                 <td class="fw-semibold">{{ $etudiant['nom'] }} {{ $etudiant['prenom'] }}</td>
-                                <td><span class="badge-filiere {{ $fClass }}">{{ $fShort }}</span></td>
+                                <td><span class="badge-filiere" style="background: {{ $filiereBg }}; color: {{ $filiereTextColor }};">{{ $filiereName ?: '-' }}</span></td>
                                 <td>{{ $etudiant['encadrant'] }}</td>
                                 <td class="text-danger">
                                     @if(($diagnostic['salles_manquantes'] ?? 0) > 0)
