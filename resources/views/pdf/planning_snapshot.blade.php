@@ -27,11 +27,20 @@
     </style>
 </head>
 <body>
+    @php
+        $schoolName     = $schoolName     ?? \App\Models\Configuration::get('school_name');
+        $departmentName = $departmentName ?? \App\Models\Configuration::get('department_name');
+        $sessionName    = $sessionName    ?? 'Première Session';
+        $logoSrc        = $logoSrc        ?? \App\Models\Configuration::logoDataUri();
+    @endphp
     <div class="header">
-        <h1>{{ \App\Models\Configuration::get('etablissement') }}</h1>
-        <h2>{{ \App\Models\Configuration::get('departement') }}</h2>
+        @if($logoSrc)
+            <img src="{{ $logoSrc }}" alt="logo" style="max-height:60px; margin-bottom:6px;">
+        @endif
+        <h1>{{ $schoolName }}</h1>
+        <h2>{{ $departmentName }}</h2>
         <h3>Planning des soutenances des Projets de Fin d'Etude</h3>
-        <div class="session">({{ \App\Models\Configuration::get('session') }})</div>
+        <div class="session">({{ $sessionName }})</div>
         <div class="annee">Année Universitaire {{ $anneeUniversitaire ?? (date('n') < 9 ? (date('Y') - 1) . '/' . date('Y') : date('Y') . '/' . (date('Y') + 1)) }}</div>
     </div>
 

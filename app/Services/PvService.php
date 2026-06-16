@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\EnseignantRepository;
+use App\Models\Configuration;
 use App\Models\Soutenance;
 
 class PvService
@@ -14,10 +15,39 @@ class PvService
         $this->enseignantRepository = $enseignantRepository;
     }
 
+    /**
+     * Keep names compact so the PV always fits on a single page, even with
+     * long professor names (no line-wrapping in the jury/signature cells).
+     */
+    private function shortName(string $name, int $max = 38): string
+    {
+        $name = trim(preg_replace('/\s+/', ' ', $name));
+        if (mb_strlen($name) <= $max) {
+            return $name;
+        }
+
+        return rtrim(mb_substr($name, 0, $max - 1)).'…';
+    }
 
     public function generatePvForStudent(Soutenance $soutenance, $customFolder = 'app/public')
     {
         $template = new \PhpOffice\PhpWord\TemplateProcessor(storage_path('template_pv.docx'));
+
+        // Dynamic document header (school name, department, optional logo).
+        $template->setValue('school_name', Configuration::get('school_name'));
+        $template->setValue('department_name', Configuration::get('department_name'));
+
+        $logoPath = Configuration::logoPath();
+        if ($logoPath) {
+            $template->setImageValue('school_logo', [
+                'path'   => $logoPath,
+                'width'  => 90,
+                'height' => 90,
+                'ratio'  => true,
+            ]);
+        } else {
+            $template->setValue('school_logo', '');
+        }
 
         $currentYear = date('Y');
         $annee_univ = ($currentYear - 1) . '-' . $currentYear;
@@ -26,14 +56,14 @@ class PvService
         $nom = $soutenance->projet->etudiant->nom;
         $prenom = $soutenance->projet->etudiant->prenom;
 
-        $template->setValue('nom_etudiant', $nom . ' ' . $prenom);
+        $template->setValue('nom_etudiant', $this->shortName($nom . ' ' . $prenom));
 
         // Fully dynamic filière name (no hardcoded GI/ID/TDIA checkboxes).
         $filiereName = $soutenance->projet->etudiant->filiere?->nom ?? '';
         $template->setValue('filiere_name', $filiereName);
 
         $encadrant = $soutenance->projet->encadrant;
-        $template->setValue('nom_encadrant', $encadrant->nom . ' ' . $encadrant->prenom);
+        $template->setValue('nom_encadrant', $this->shortName($encadrant->nom . ' ' . $encadrant->prenom));
 
         $rapporteurs = $soutenance->jury->enseignants->where('pivot.role', '!=', 'President')->values();
         $count = $rapporteurs->count();
@@ -41,7 +71,7 @@ class PvService
         foreach ($rapporteurs as $index => $prof) {
             $rowNumber = $index + 1;
 
-            $template->setValue("nom_jury#{$rowNumber}", $prof->nom . ' ' . $prof->prenom);
+            $template->setValue("nom_jury#{$rowNumber}", $this->shortName($prof->nom . ' ' . $prof->prenom));
             $template->setValue("jury_role#{$rowNumber}", $prof->pivot->role);
         }
 
@@ -66,7 +96,7 @@ class PvService
             $template->setValue(
                 'signature' . ($i + 1),
                 $member
-                    ? ('Pr. ' . $member->nom . ' ' . $member->prenom)
+                    ? $this->shortName('Pr. ' . $member->nom . ' ' . $member->prenom)
                     : ''
             );
         }

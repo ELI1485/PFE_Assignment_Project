@@ -6,33 +6,54 @@ use App\Models\Configuration;
 use App\Models\Filiere;
 use App\Services\ColorService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
-class SettingsController extends Controller
+class ConfigurationController extends Controller
 {
+    /** Show the settings page (document header config + logo + filières). */
     public function index()
     {
         $filieres = Filiere::withCount('etudiants')->orderBy('nom')->get();
 
         $config = [
-            'etablissement' => Configuration::get('etablissement'),
-            'departement'   => Configuration::get('departement'),
-            'session'       => Configuration::get('session'),
+            'school_name'     => Configuration::get('school_name'),
+            'department_name' => Configuration::get('department_name'),
+            'logo_url'        => Configuration::logoUrl(),
         ];
 
         return view('settings.index', compact('filieres', 'config'));
     }
 
-    /** Update the document / export header configuration. */
-    public function updateConfig(Request $request)
+    /** Save the school name, department name and (optional) logo upload. */
+    public function update(Request $request)
     {
         $data = $request->validate([
-            'etablissement' => 'nullable|string|max:255',
-            'departement'   => 'nullable|string|max:255',
-            'session'       => 'nullable|string|max:255',
+            'school_name'     => 'nullable|string|max:255',
+            'department_name' => 'nullable|string|max:255',
+            'school_logo'     => 'nullable|image|mimes:png,jpg,jpeg,gif,webp|max:4096',
+            'remove_logo'     => 'nullable|boolean',
         ]);
 
-        foreach ($data as $key => $value) {
-            Configuration::set($key, $value);
+        Configuration::set('school_name', $data['school_name'] ?? null);
+        Configuration::set('department_name', $data['department_name'] ?? null);
+
+        // Remove existing logo if requested.
+        if ($request->boolean('remove_logo')) {
+            $old = Configuration::get('school_logo_path');
+            if ($old) {
+                Storage::disk('public')->delete($old);
+            }
+            Configuration::set('school_logo_path', null);
+        }
+
+        // Store a newly uploaded logo (replacing any previous one).
+        if ($request->hasFile('school_logo')) {
+            $old = Configuration::get('school_logo_path');
+            if ($old) {
+                Storage::disk('public')->delete($old);
+            }
+            $path = $request->file('school_logo')->store('logos', 'public');
+            Configuration::set('school_logo_path', $path);
         }
 
         return redirect()->route('settings.index')

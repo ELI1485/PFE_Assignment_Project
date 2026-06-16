@@ -16,6 +16,10 @@
 
 @section('content')
 
+@if (session('success'))
+    <div class="alert alert-success">{{ session('success') }}</div>
+@endif
+
 @if ($errors->any())
     <div class="alert alert-danger">
         <ul class="mb-0">
@@ -31,21 +35,33 @@
     {{-- ─── En-tête des documents ─────────────────────────────────────── --}}
     <div class="card">
         <div class="settings-card-title mb-1"><i class="bi bi-building text-primary"></i> En-tête des documents</div>
-        <div class="settings-hint mb-3">Ces informations apparaissent en haut des exports PDF, Word et des PV générés.</div>
-        <form action="{{ route('settings.config') }}" method="POST">
+        <div class="settings-hint mb-3">Ces informations (et le logo) apparaissent en haut des exports PDF, Word et des PV générés.</div>
+        <form action="{{ route('settings.update') }}" method="POST" enctype="multipart/form-data">
             @csrf
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Établissement</label>
-                    <input type="text" name="etablissement" class="form-control" value="{{ old('etablissement', $config['etablissement']) }}">
+                    <label class="form-label fw-semibold">Nom de l'école</label>
+                    <input type="text" name="school_name" class="form-control" value="{{ old('school_name', $config['school_name']) }}" placeholder="ex: Ecole Nationale des Sciences Appliquées - Al Hoceima">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Département</label>
-                    <input type="text" name="departement" class="form-control" value="{{ old('departement', $config['departement']) }}">
+                    <input type="text" name="department_name" class="form-control" value="{{ old('department_name', $config['department_name']) }}" placeholder="ex: Département Mathématiques et Informatique">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Session</label>
-                    <input type="text" name="session" class="form-control" value="{{ old('session', $config['session']) }}" placeholder="ex: Première Session">
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">Logo de l'école <span class="settings-hint">(PNG, JPG… max 4 Mo)</span></label>
+                    <input type="file" name="school_logo" class="form-control" accept="image/*">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    @if(!empty($config['logo_url']))
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="{{ $config['logo_url'] }}" alt="logo" style="max-height:48px; max-width:120px; border:1px solid var(--border); border-radius:8px; padding:4px; background:#fff;">
+                            <label class="d-flex align-items-center gap-2 mb-0 text-danger small" style="cursor:pointer;">
+                                <input type="checkbox" name="remove_logo" value="1" class="form-check-input m-0"> Supprimer
+                            </label>
+                        </div>
+                    @else
+                        <span class="settings-hint">Aucun logo enregistré.</span>
+                    @endif
                 </div>
             </div>
             <div class="d-flex justify-content-end mt-3">

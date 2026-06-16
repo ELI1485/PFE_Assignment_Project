@@ -12,7 +12,7 @@ class WordExportService
 {
     public function __construct(protected HistoryService $historyService) {}
 
-    public function downloadSnapshot(object $snapshot, string $type)
+    public function downloadSnapshot(object $snapshot, string $type, array $filiereIds = [], ?string $sessionName = null)
     {
         $phpWord = new PhpWord;
         Settings::setOutputEscapingEnabled(true);
@@ -44,14 +44,24 @@ class WordExportService
         $headerTable = $section->addTable('HeaderBox');
         $headerCell = $headerTable->addRow()->addCell(8000);
 
+        // Optional school logo (centered above the title).
+        $logoPath = \App\Models\Configuration::logoPath();
+        if ($logoPath) {
+            $headerCell->addImage($logoPath, [
+                'height' => 50,
+                'alignment' => 'center',
+                'wrappingStyle' => 'inline',
+            ]);
+        }
+
         $headerCell->addText(
-            \App\Models\Configuration::get('etablissement'),
+            \App\Models\Configuration::get('school_name'),
             ['bold' => true, 'size' => 12],
             array_merge($center, ['spaceAfter' => 40])
         );
 
         $headerCell->addText(
-            \App\Models\Configuration::get('departement'),
+            \App\Models\Configuration::get('department_name'),
             ['size' => 11],
             array_merge($center, ['spaceAfter' => 40])
         );
@@ -63,7 +73,7 @@ class WordExportService
                 array_merge($center, ['spaceAfter' => 40])
             );
             $headerCell->addText(
-                '('.\App\Models\Configuration::get('session').')',
+                '('.($sessionName ?: 'Première Session').')',
                 ['size' => 10, 'italic' => true],
                 array_merge($center, ['spaceAfter' => 40])
             );
@@ -110,6 +120,12 @@ class WordExportService
 
         $rows = collect($snapshot->data);
 
+        // Optional filière filter (used by the planning export modal).
+        if (! empty($filiereIds)) {
+            $ids = array_map('intval', $filiereIds);
+            $rows = $rows->filter(fn ($r) => in_array((int) ($r['filiere_id'] ?? 0), $ids, true))->values();
+        }
+
         if ($type === 'planning') {
             $this->addPlanningTable($section, $rows);
         } else {
@@ -125,14 +141,14 @@ class WordExportService
         return response()->download($tempPath, $filename)->deleteFileAfterSend(true);
     }
 
-    public function downloadLivePlanning()
+    public function downloadLivePlanning(array $filiereIds = [], ?string $sessionName = null)
     {
         $snapshot = $this->historyService->latest('planning');
         if (! $snapshot) {
             return back()->with('error', 'Aucun planning généré.');
         }
 
-        return $this->downloadSnapshot($snapshot, 'planning');
+        return $this->downloadSnapshot($snapshot, 'planning', $filiereIds, $sessionName);
     }
 
     public function downloadLiveAffectation()

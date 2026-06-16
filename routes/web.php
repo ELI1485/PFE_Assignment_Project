@@ -3,10 +3,10 @@
 use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\ConformiteController;
 use App\Http\Controllers\ExportController;
+use App\Http\Controllers\ConfigurationController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PvController;
 use App\Http\Controllers\SalleController;
-use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VerificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,8 +37,8 @@ Route::get('/snapshot/{type}/{id}/{format}', [AssignmentController::class, 'down
     ->where(['type' => 'affectation|planning', 'format' => 'pdf|word']);
 
 // ─── Exports (current live data) ──────────────────────────────────────────────
-Route::get('/export/planning/pdf', [ExportController::class, 'downloadPlanning'])->name('export.planning');
-Route::get('/export/planning/word', [ExportController::class, 'downloadPlanningWord'])->name('export.planning.word');
+Route::match(['get', 'post'], '/export/planning/pdf', [ExportController::class, 'downloadPlanning'])->name('export.planning');
+Route::match(['get', 'post'], '/export/planning/word', [ExportController::class, 'downloadPlanningWord'])->name('export.planning.word');
 Route::get('/export/affectation/pdf', [ExportController::class, 'downloadAffectation'])->name('export.affectation');
 Route::get('/export/affectation/word', [ExportController::class, 'downloadAffectationWord'])->name('export.affectation.word');
 Route::get('/export/supervision', [ExportController::class, 'downloadSupervision'])->name('export.supervision');
@@ -60,9 +60,9 @@ Route::get('/verification', [VerificationController::class, 'index'])->name('ver
 // Contrôle de Conformité
 Route::get('/conformite', [ConformiteController::class, 'index'])->name('conformite.index');
 
-// ─── Paramètres (filières, couleurs, en-tête des documents) ───────────────────
-Route::get('/parametres', [SettingsController::class, 'index'])->name('settings.index');
-Route::post('/parametres/config', [SettingsController::class, 'updateConfig'])->name('settings.config');
-Route::post('/parametres/filieres', [SettingsController::class, 'storeFiliere'])->name('settings.filieres.store');
-Route::put('/parametres/filieres/{id}', [SettingsController::class, 'updateFiliere'])->name('settings.filieres.update');
-Route::delete('/parametres/filieres/{id}', [SettingsController::class, 'destroyFiliere'])->name('settings.filieres.destroy');
+// ─── Paramètres (en-tête des documents, logo, filières, couleurs) ─────────────
+Route::get('/settings', [ConfigurationController::class, 'index'])->name('settings.index');
+Route::post('/settings', [ConfigurationController::class, 'update'])->name('settings.update');
+Route::post('/settings/filieres', [ConfigurationController::class, 'storeFiliere'])->name('settings.filieres.store');
+Route::put('/settings/filieres/{id}', [ConfigurationController::class, 'updateFiliere'])->name('settings.filieres.update');
+Route::delete('/settings/filieres/{id}', [ConfigurationController::class, 'destroyFiliere'])->name('settings.filieres.destroy');

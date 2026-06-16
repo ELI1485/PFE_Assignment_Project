@@ -96,14 +96,10 @@
             <i class="bi bi-file-earmark-pdf"></i>
             PDF Supervision
         </a>
-        <a href="{{ route('export.planning') }}" class="btn btn-danger">
-            <i class="bi bi-file-earmark-pdf"></i>
-            PDF Planning Général
-        </a>
-        <a href="{{ route('export.planning.word') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-file-earmark-word"></i>
-            Word
-        </a>
+        <button type="button" class="btn btn-danger" onclick="openExportModal()">
+            <i class="bi bi-download"></i>
+            Exporter le Planning
+        </button>
         <a href="{{ route('conformite.index') }}" class="btn btn-outline-secondary">
             <i class="bi bi-shield-check"></i>
             Contrôle de Conformité
@@ -267,6 +263,65 @@
     </div>
 </div>
 
+@php
+    // Distinct filières present in the current planning data (id => [nom, color]).
+    $planningFilieres = collect($soutenances)
+        ->filter(fn ($r) => !empty($r['filiere_id']))
+        ->groupBy('filiere_id')
+        ->map(fn ($items) => [
+            'nom'    => $items->first()['filiere'] ?? '—',
+            'couleur'=> $items->first()['filiere_color'] ?? '#E0E0E0',
+        ])
+        ->sortBy('nom');
+@endphp
+
+<div class="app-modal-overlay" id="exportModal" aria-hidden="true">
+    <div class="app-modal-box" style="max-width: 560px;">
+        <h3 class="h5 fw-bold mb-1">Exporter le Planning</h3>
+        <p class="text-muted small mb-3">Choisissez les filières à inclure et le nom de la session.</p>
+
+        <form method="POST" id="exportForm">
+            @csrf
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Nom de la session</label>
+                <input type="text" name="session_name" class="form-control" value="Première Session"
+                       placeholder="Ex. Première Session, Session de Rattrapage…">
+            </div>
+
+            <div class="mb-2 d-flex justify-content-between align-items-center">
+                <label class="form-label fw-semibold mb-0">Filières à inclure</label>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-link btn-sm p-0" onclick="toggleAllFilieres(true)">Tout sélectionner</button>
+                    <span class="text-muted">·</span>
+                    <button type="button" class="btn btn-link btn-sm p-0" onclick="toggleAllFilieres(false)">Tout désélectionner</button>
+                </div>
+            </div>
+            <div style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;">
+                @forelse($planningFilieres as $fid => $f)
+                    <label class="d-flex align-items-center gap-2 py-1" style="cursor:pointer;">
+                        <input type="checkbox" name="filieres[]" value="{{ $fid }}" class="form-check-input m-0 export-filiere-cb" checked>
+                        <span class="filiere-badge" style="background: {{ $f['couleur'] }}; color: {{ \App\Services\ColorService::readableTextColor($f['couleur']) }};">{{ $f['nom'] }}</span>
+                    </label>
+                @empty
+                    <div class="text-muted small">Aucune filière dans le planning actuel.</div>
+                @endforelse
+            </div>
+            <div class="form-text">Si aucune filière n'est cochée, toutes les filières seront incluses.</div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" class="btn btn-outline-secondary" onclick="closeExportModal()">Annuler</button>
+                <button type="submit" formaction="{{ route('export.planning.word') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-file-earmark-word"></i> Exporter Word
+                </button>
+                <button type="submit" formaction="{{ route('export.planning') }}" class="btn btn-danger">
+                    <i class="bi bi-file-earmark-pdf"></i> Exporter PDF
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="app-modal-overlay" id="salleModal" aria-hidden="true">
     <div class="app-modal-box">
         <h3 class="h5 fw-bold mb-3">Ajouter une Salle</h3>
@@ -318,6 +373,20 @@
 
 @push('scripts')
 <script>
+    function openExportModal() {
+        document.getElementById('exportModal').classList.add('is-open');
+    }
+
+    function closeExportModal() {
+        document.getElementById('exportModal').classList.remove('is-open');
+    }
+
+    function toggleAllFilieres(state) {
+        document.querySelectorAll('.export-filiere-cb').forEach(function (cb) {
+            cb.checked = state;
+        });
+    }
+
     function openSalleModal() {
         document.getElementById('salleModal').classList.add('is-open');
     }

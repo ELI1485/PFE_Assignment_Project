@@ -72,9 +72,17 @@
 <body>
 
 {{-- ─── Institution Header ─── --}}
+@php
+    $schoolName     = $schoolName     ?? \App\Models\Configuration::get('school_name');
+    $departmentName = $departmentName ?? \App\Models\Configuration::get('department_name');
+    $logoSrc        = $logoSrc        ?? \App\Models\Configuration::logoDataUri();
+@endphp
 <div class="header-box">
-    <div class="school">{{ \App\Models\Configuration::get('etablissement') }}</div>
-    <div class="dept">{{ \App\Models\Configuration::get('departement') }}</div>
+    @if($logoSrc)
+        <img src="{{ $logoSrc }}" alt="logo" style="max-height:60px; margin-bottom:6px;">
+    @endif
+    <div class="school">{{ $schoolName }}</div>
+    <div class="dept">{{ $departmentName }}</div>
     <div class="doc-type">Affectation des encadrants de Projet de Fin d'Etude</div>
     <div class="annee">Année Universitaire {{ date('n') < 9 ? (date('Y') - 1) . '/' . date('Y') : date('Y') . '/' . (date('Y') + 1) }}</div>
 </div>
